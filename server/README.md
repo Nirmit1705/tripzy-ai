@@ -49,9 +49,12 @@ AI-powered trip planning backend service that generates personalized travel itin
 - `PUT /rate-trip/:id` - Rate and review a completed trip
 
 ### Itinerary Routes (`/api/itinerary`)
-- `POST /generate` - Generate new itinerary
-- `GET /` - Get user itineraries
+- `POST /generate` - Generate new itinerary from form data
+- `POST /save-draft` - Save draft itinerary
+- `GET /` - Get user itineraries (with pagination and filtering)
 - `GET /:id` - Get specific itinerary
+- `PUT /:id` - Update itinerary
+- `DELETE /:id` - Delete itinerary
 
 ### Agent Routes (`/api/agent`)
 - `POST /chat` - Chat with AI agent

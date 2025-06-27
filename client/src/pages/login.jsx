@@ -30,12 +30,18 @@ export default function LoginPage() {
         try {
           const userData = JSON.parse(decodeURIComponent(userParam));
           login(userData, token);
-          // Clear URL params after successful login
-          navigate('/', { replace: true });
+          
+          // Check if there's a pending trip form to redirect to
+          const pendingTripForm = sessionStorage.getItem('pendingTripForm');
+          if (pendingTripForm) {
+            console.log('Found pending trip form, redirecting to plan page');
+            navigate('/plan', { replace: true });
+          } else {
+            navigate('/', { replace: true });
+          }
         } catch (error) {
           console.error('Error parsing user data:', error);
           setError('Authentication failed. Please try again.');
-          // Clear URL params
           navigate('/login', { replace: true });
         }
       } else if (errorParam) {
@@ -47,7 +53,6 @@ export default function LoginPage() {
           'auth_failed': 'Authentication failed. Please try again.'
         };
         setError(errorMessages[errorParam] || 'An error occurred during authentication.');
-        // Clear URL params
         navigate('/login', { replace: true });
       }
     }

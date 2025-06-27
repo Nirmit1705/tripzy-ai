@@ -19,9 +19,16 @@ const Results = () => {
 
   useEffect(() => {
     // Get form data from sessionStorage
-    const savedData = sessionStorage.getItem('tripFormData');
-    if (savedData) {
-      const parsedData = JSON.parse(savedData);
+    const savedFormData = sessionStorage.getItem('tripFormData');
+    const savedItineraryData = sessionStorage.getItem('itineraryData');
+    
+    console.log('Results page data check:', { 
+      hasFormData: !!savedFormData, 
+      hasItineraryData: !!savedItineraryData 
+    });
+    
+    if (savedFormData) {
+      const parsedData = JSON.parse(savedFormData);
       setFormData(parsedData);
       
       // Calculate end date from start date and number of days
@@ -32,10 +39,66 @@ const Results = () => {
         setEndDate(endDate.toISOString().split('T')[0]);
       }
       
-      // Generate mock data based on form data
-      generateMockItinerary(parsedData);
+      // Use database itinerary data if available, otherwise generate mock data
+      if (savedItineraryData) {
+        try {
+          const itineraryData = JSON.parse(savedItineraryData);
+          console.log('Using database itinerary data:', itineraryData);
+          // Convert database format to display format if needed
+          generateItineraryFromDatabase(itineraryData, parsedData);
+        } catch (error) {
+          console.error('Error parsing itinerary data:', error);
+          generateMockItinerary(parsedData);
+        }
+      } else {
+        // Generate mock data if no database data
+        generateMockItinerary(parsedData);
+      }
+    } else {
+      // If no form data, redirect to plan page
+      console.log('No form data found, redirecting to plan page');
+      navigate('/plan');
     }
-  }, []);
+  }, [navigate]);
+
+  const generateItineraryFromDatabase = (dbItinerary, formData) => {
+    console.log('Processing database itinerary:', dbItinerary);
+    
+    // For now, use the database metadata but generate mock daily data
+    // Later this will be replaced with actual AI-generated content
+    const days = parseInt(formData.numberOfDays) || 3;
+    const mockItinerary = [];
+    
+    for (let i = 1; i <= days; i++) {
+      mockItinerary.push({
+        day: i,
+        location: `${formData.destinations?.[0] || 'Destination'} - Day ${i}`,
+        hotel: {
+          name: `Hotel for Day ${i}`,
+          address: `Address in ${formData.destinations?.[0] || 'destination'}`,
+          rating: 4.0 + Math.random(),
+          price: formData.budget === 'low' ? '₹2000' : formData.budget === 'moderate' ? '₹4000' : '₹8000'
+        },
+        transport: {
+          mode: i === 1 ? 'Flight' : 'Local Transport',
+          details: i === 1 ? 'Flight to destination' : 'Local transportation',
+          cost: i === 1 ? '₹5000' : '₹500'
+        },
+        activities: [
+          `Morning: Explore local attractions`,
+          `Afternoon: Cultural experiences`,
+          `Evening: Local cuisine and nightlife`
+        ],
+        weather: {
+          temp: `${25 + Math.floor(Math.random() * 10)}°C`,
+          condition: ['Sunny', 'Partly Cloudy', 'Clear'][i % 3],
+          humidity: `${50 + Math.floor(Math.random() * 30)}%`
+        }
+      });
+    }
+    
+    setItinerary(mockItinerary);
+  };
 
   const generateMockItinerary = (data) => {
     const days = parseInt(data.numberOfDays) || 3;
@@ -44,10 +107,10 @@ const Results = () => {
     for (let i = 1; i <= days; i++) {
       mockItinerary.push({
         day: i,
-        location: `${data.destination} - Area ${i}`,
+        location: `${data.destinations?.[0] || data.destination} - Area ${i}`,
         hotel: {
           name: `Grand Hotel Day ${i}`,
-          address: `123 Main Street, ${data.destination}`,
+          address: `123 Main Street, ${data.destinations?.[0] || data.destination}`,
           rating: 4.5,
           price: data.budget === 'low' ? '₹2000' : data.budget === 'moderate' ? '₹4000' : '₹8000'
         },

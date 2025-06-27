@@ -1,18 +1,21 @@
 const express = require('express');
 const router = express.Router();
+const {
+  generateItinerary,
+  getUserItineraries,
+  getItinerary,
+  saveDraftItinerary,
+  updateItinerary,
+  deleteItinerary
+} = require('../controllers/itineraryController');
 const { protect } = require('../middlewares/authMiddleware');
 
-// Placeholder routes - implement these controllers as needed
-router.get('/', protect, (req, res) => {
-  res.json({ message: 'Get itineraries endpoint' });
-});
-
-router.post('/generate', protect, (req, res) => {
-  res.json({ message: 'Generate itinerary endpoint' });
-});
-
-router.get('/:id', protect, (req, res) => {
-  res.json({ message: 'Get specific itinerary endpoint' });
-});
+// Itinerary routes
+router.post('/generate', protect, generateItinerary);
+router.post('/save-draft', protect, saveDraftItinerary);
+router.get('/', protect, getUserItineraries);
+router.get('/:id', protect, getItinerary);
+router.put('/:id', protect, updateItinerary);
+router.delete('/:id', protect, deleteItinerary);
 
 module.exports = router;

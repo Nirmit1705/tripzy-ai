@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar, MapPin, DollarSign, Clock, Users, X, Plane, Menu, LogOut, User } from "lucide-react"
 import { useAuth } from "../contexts/AuthContext"
+import apiService from "../services/api"
 
 const TripForm = () => {
   const navigate = useNavigate()
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, user, logout, checkAuthStatus } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { register, handleSubmit, setValue, watch } = useForm({
     defaultValues: {
@@ -32,6 +33,8 @@ const TripForm = () => {
   const [selectedCurrency, setSelectedCurrency] = useState("INR")
   const [destinationsList, setDestinationsList] = useState([])
   const [currentDestination, setCurrentDestination] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const interests = [
     "Adventure", "Culture", "Food", "Nature", "History", 
@@ -85,15 +88,92 @@ const TripForm = () => {
     setValue("destinations", updatedDestinations)
   }
 
-  const onSubmit = (data) => {
-    sessionStorage.setItem('tripFormData', JSON.stringify({
-      ...data,
-      destinations: destinationsList,
-      interests: selectedInterests,
-      budget: selectedBudget,
-      currency: selectedCurrency
-    }))
-    navigate('/results')
+  const onSubmit = async (data) => {
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      // Check authentication status more thoroughly
+      const authCheck = checkAuthStatus()
+      const token = localStorage.getItem('tripzy_token')
+      
+      console.log('Form submission auth check:', { 
+        isAuthenticated, 
+        authCheck, 
+        hasToken: !!token,
+        user: user?.email 
+      })
+
+      // If not authenticated, redirect to login
+      if (!authCheck || !token) {
+        console.log('User not authenticated, storing form data and redirecting to login')
+        
+        // Store form data for after login
+        const formDataToStore = {
+          destinations: destinationsList,
+          startDate: data.startDate,
+          numberOfDays: parseInt(data.numberOfDays),
+          budget: selectedBudget,
+          travelers: parseInt(data.travelers),
+          interests: selectedInterests,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          currency: selectedCurrency,
+          title: `Trip to ${destinationsList.join(', ')}`
+        }
+        
+        sessionStorage.setItem('pendingTripForm', JSON.stringify(formDataToStore))
+        navigate('/login')
+        return
+      }
+
+      // Prepare form data for backend
+      const formData = {
+        destinations: destinationsList,
+        startDate: data.startDate,
+        numberOfDays: parseInt(data.numberOfDays),
+        budget: selectedBudget,
+        travelers: parseInt(data.travelers),
+        interests: selectedInterests,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        currency: selectedCurrency,
+        title: `Trip to ${destinationsList.join(', ')}`
+      }
+
+      console.log('Submitting authenticated form data:', formData)
+
+      // Submit to backend
+      const response = await apiService.generateItinerary(formData)
+      
+      console.log('Backend response:', response)
+
+      if (response.success) {
+        // Store response data for results page
+        sessionStorage.setItem('tripFormData', JSON.stringify(formData))
+        sessionStorage.setItem('itineraryData', JSON.stringify(response.data))
+        
+        // Navigate to results page
+        navigate('/results')
+      } else {
+        throw new Error(response.message || 'Failed to generate itinerary')
+      }
+
+    } catch (error) {
+      console.error('Form submission error:', error)
+      
+      // Handle specific authentication errors
+      if (error.message.includes('Not authorized') || error.message.includes('no token')) {
+        setSubmitError('Session expired. Please sign in again.')
+        // Clear auth data and redirect to login
+        logout()
+        navigate('/login')
+      } else {
+        setSubmitError(error.message || 'Failed to create itinerary. Please try again.')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -474,15 +554,35 @@ const TripForm = () => {
 
                   {/* Submit Button - Outside columns and centered */}
                   <div className="pt-8">
+                    {submitError && (
+                      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-red-600 text-sm text-center">{submitError}</p>
+                      </div>
+                    )}
+                    
                     <div className="flex justify-center">
                       <Button 
                         type="submit" 
-                        className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white py-4 px-12 text-xl font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300" 
+                        disabled={isSubmitting || destinationsList.length === 0}
+                        className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white py-4 px-12 text-xl font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" 
                         size="lg"
                       >
-                        Generate My Itinerary
+                        {isSubmitting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                            Creating Itinerary...
+                          </>
+                        ) : (
+                          'Generate My Itinerary'
+                        )}
                       </Button>
                     </div>
+                    
+                    {destinationsList.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center mt-2">
+                        Please add at least one destination to continue
+                      </p>
+                    )}
                   </div>
                 </form>
               </CardContent>

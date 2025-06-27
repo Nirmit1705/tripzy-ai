@@ -1,70 +1,111 @@
-import axios from 'axios'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+class ApiService {
+  constructor() {
+    this.baseURL = API_BASE_URL;
+  }
 
-// Create axios instance with default config
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+  // Get auth token from localStorage
+  getAuthToken() {
+    const token = localStorage.getItem('tripzy_token');
+    console.log('Getting auth token:', token ? 'Token exists' : 'No token found');
+    return token;
+  }
 
-// Trip Planning API calls
-export const tripAPI = {
-  // Generate itinerary
-  generateItinerary: async (tripData) => {
-    try {
-      const response = await api.post('/generate-itinerary', tripData)
-      return response.data
-    } catch (error) {
-      console.error('Error generating itinerary:', error)
-      throw error
+  // Get auth headers
+  getAuthHeaders() {
+    const token = this.getAuthToken();
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-  },
+    
+    console.log('API Headers:', { ...headers, Authorization: headers.Authorization ? 'Bearer [TOKEN]' : 'No token' });
+    return headers;
+  }
 
-  // Get destination suggestions
-  getDestinationSuggestions: async (query) => {
-    try {
-      const response = await api.get(`/destinations/search?q=${query}`)
-      return response.data
-    } catch (error) {
-      console.error('Error fetching destinations:', error)
-      throw error
-    }
-  },
+  // Generic API call method
+  async apiCall(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: this.getAuthHeaders(),
+      ...options
+    };
 
-  // Get weather data
-  getWeatherData: async (destination) => {
-    try {
-      const response = await api.get(`/weather/${destination}`)
-      return response.data
-    } catch (error) {
-      console.error('Error fetching weather:', error)
-      throw error
-    }
-  },
+    console.log('Making API call:', { url, method: config.method || 'GET', hasToken: !!this.getAuthToken() });
 
-  // Get local events
-  getLocalEvents: async (destination, dates) => {
     try {
-      const response = await api.get(`/events/${destination}`, {
-        params: { startDate: dates.start, endDate: dates.end }
-      })
-      return response.data
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('API call failed:', { status: response.status, statusText: response.statusText, data });
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      console.log('API call success:', { endpoint, status: response.status });
+      return data;
     } catch (error) {
-      console.error('Error fetching events:', error)
-      throw error
+      console.error(`API call failed: ${endpoint}`, error);
+      throw error;
     }
+  }
+
+  // Itinerary API methods
+  async generateItinerary(formData) {
+    return this.apiCall('/itinerary/generate', {
+      method: 'POST',
+      body: JSON.stringify(formData)
+    });
+  }
+
+  async saveDraftItinerary(formData) {
+    return this.apiCall('/itinerary/save-draft', {
+      method: 'POST',
+      body: JSON.stringify(formData)
+    });
+  }
+
+  async getUserItineraries(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/itinerary${queryString ? `?${queryString}` : ''}`;
+    return this.apiCall(endpoint);
+  }
+
+  async getItinerary(id) {
+    return this.apiCall(`/itinerary/${id}`);
+  }
+
+  async updateItinerary(id, data) {
+    return this.apiCall(`/itinerary/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async deleteItinerary(id) {
+    return this.apiCall(`/itinerary/${id}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // User API methods
+  async getUserProfile() {
+    return this.apiCall('/user/profile');
+  }
+
+  async getTripHistory() {
+    return this.apiCall('/user/trip-history');
+  }
+
+  async getCurrentTrips() {
+    return this.apiCall('/user/current-trips');
   }
 }
 
-// Utility functions
-export const formatError = (error) => {
-  if (error.response?.data?.message) {
-    return error.response.data.message
-  }
-  return error.message || 'An unexpected error occurred'
-}
-
-export default api
+// Export singleton instance
+const apiService = new ApiService();
+export default apiService;
