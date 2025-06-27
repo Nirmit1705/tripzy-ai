@@ -44,6 +44,7 @@ const Profile = () => {
     {
       id: 1,
       title: "Summer Trip to Goa",
+      startLocation: "Mumbai, India",
       destination: "Goa, India",
       startDate: "2025-07-15",
       days: 5,
@@ -55,6 +56,7 @@ const Profile = () => {
     {
       id: 2,
       title: "Weekend in Mumbai",
+      startLocation: "Pune, India",
       destination: "Mumbai, India",
       startDate: "2025-06-20",
       days: 3,
@@ -66,6 +68,7 @@ const Profile = () => {
     {
       id: 3,
       title: "Kerala Backwaters Tour",
+      startLocation: "Bangalore, India",
       destination: "Kerala, India",
       startDate: "2025-08-10",
       days: 7,
@@ -81,6 +84,7 @@ const Profile = () => {
     {
       id: 4,
       title: "Delhi Heritage Walk",
+      startLocation: "Mumbai, India",
       destination: "Delhi, India",
       startDate: "2024-12-15",
       endDate: "2024-12-18",
@@ -94,6 +98,7 @@ const Profile = () => {
     {
       id: 5,
       title: "Rajasthan Royal Tour",
+      startLocation: "Delhi, India",
       destination: "Rajasthan, India",
       startDate: "2024-11-20",
       endDate: "2024-11-27",
@@ -107,6 +112,7 @@ const Profile = () => {
     {
       id: 6,
       title: "Himachal Adventure",
+      startLocation: "Chandigarh, India",
       destination: "Himachal Pradesh, India",
       startDate: "2024-10-10",
       endDate: "2024-10-15",
@@ -356,7 +362,11 @@ const Profile = () => {
                       
                       <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
                         <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
+                          <MapPin className="w-4 h-4 text-blue-500" />
+                          <span>{draft.startLocation}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4 text-green-500" />
                           <span>{draft.destination}</span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -430,7 +440,11 @@ const Profile = () => {
                       
                       <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
                         <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
+                          <MapPin className="w-4 h-4 text-blue-500" />
+                          <span>{trip.startLocation}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4 text-green-500" />
                           <span>{trip.destination}</span>
                         </div>
                         <div className="flex items-center gap-1">

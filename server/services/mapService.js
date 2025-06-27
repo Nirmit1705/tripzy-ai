@@ -249,6 +249,70 @@ class MapService {
     return cityMap[cityCode] || { lat: 48.8566, lon: 2.3522, country: 'FR' }; // Default to Paris
   }
 
+  // Enhanced method for comprehensive city coordinates
+  getAllCityCoordinates() {
+    return {
+      // Popular Indian cities
+      'Delhi': { lat: 28.6139, lon: 77.2090, country: 'IN', code: 'DEL' },
+      'Mumbai': { lat: 19.0760, lon: 72.8777, country: 'IN', code: 'BOM' },
+      'Bangalore': { lat: 12.9716, lon: 77.5946, country: 'IN', code: 'BLR' },
+      'Chennai': { lat: 13.0827, lon: 80.2707, country: 'IN', code: 'MAA' },
+      'Kolkata': { lat: 22.5726, lon: 88.3639, country: 'IN', code: 'CCU' },
+      'Pune': { lat: 18.5204, lon: 73.8567, country: 'IN', code: 'PNQ' },
+      'Hyderabad': { lat: 17.3850, lon: 78.4867, country: 'IN', code: 'HYD' },
+      'Ahmedabad': { lat: 23.0225, lon: 72.5714, country: 'IN', code: 'AMD' },
+      'Jaipur': { lat: 26.9124, lon: 75.7873, country: 'IN', code: 'JAI' },
+      'Goa': { lat: 15.2993, lon: 74.1240, country: 'IN', code: 'GOI' },
+      
+      // International cities
+      'Paris': { lat: 48.8566, lon: 2.3522, country: 'FR', code: 'PAR' },
+      'London': { lat: 51.5074, lon: -0.1278, country: 'GB', code: 'LON' },
+      'New York': { lat: 40.7128, lon: -74.0060, country: 'US', code: 'NYC' },
+      'Tokyo': { lat: 35.6762, lon: 139.6503, country: 'JP', code: 'TYO' },
+      'Berlin': { lat: 52.5200, lon: 13.4050, country: 'DE', code: 'BER' },
+      'Rome': { lat: 41.9028, lon: 12.4964, country: 'IT', code: 'ROM' },
+      'Madrid': { lat: 40.4168, lon: -3.7038, country: 'ES', code: 'MAD' },
+      'Barcelona': { lat: 41.3851, lon: 2.1734, country: 'ES', code: 'BCN' },
+      'Amsterdam': { lat: 52.3676, lon: 4.9041, country: 'NL', code: 'AMS' },
+      'Zurich': { lat: 47.3769, lon: 8.5417, country: 'CH', code: 'ZUR' },
+      'Dubai': { lat: 25.2048, lon: 55.2708, country: 'AE', code: 'DXB' },
+      'Singapore': { lat: 1.3521, lon: 103.8198, country: 'SG', code: 'SIN' },
+      'Bangkok': { lat: 13.7563, lon: 100.5018, country: 'TH', code: 'BKK' },
+      'Sydney': { lat: -33.8688, lon: 151.2093, country: 'AU', code: 'SYD' },
+      'Los Angeles': { lat: 34.0522, lon: -118.2437, country: 'US', code: 'LAX' }
+    };
+  }
+
+  // Find city coordinates by name (fuzzy search)
+  findCityCoordinates(cityName) {
+    const allCities = this.getAllCityCoordinates();
+    
+    // Exact match first
+    if (allCities[cityName]) {
+      return allCities[cityName];
+    }
+    
+    // Case-insensitive exact match
+    const exactMatch = Object.keys(allCities).find(
+      city => city.toLowerCase() === cityName.toLowerCase()
+    );
+    if (exactMatch) {
+      return allCities[exactMatch];
+    }
+    
+    // Partial match
+    const partialMatch = Object.keys(allCities).find(
+      city => city.toLowerCase().includes(cityName.toLowerCase()) ||
+              cityName.toLowerCase().includes(city.toLowerCase())
+    );
+    if (partialMatch) {
+      return allCities[partialMatch];
+    }
+    
+    // Default to Delhi if no match found
+    return allCities['Delhi'];
+  }
+
   // Estimate hotel price based on name and location
   estimateHotelPrice(hotel) {
     const hotelName = hotel.name.toLowerCase();

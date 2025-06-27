@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import apiService from "../services/api";
+import MapComponent from "../components/MapComponent"
 
 const Results = () => {
   const navigate = useNavigate()
@@ -369,32 +370,39 @@ const Results = () => {
         <div className="flex">
           {/* Left Header - Trip Details (60% width to match content) */}
           <div className="w-3/5 py-4 px-4 border-r border-white/20">
-            <div className="grid grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-5 gap-3 text-sm">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <MapPin className="w-4 h-4" />
-                  <span className="font-semibold">{formData?.destinations?.[0] || formData?.destination}</span>
+                  <span className="font-semibold text-xs">{formData?.startLocation}</span>
+                </div>
+                <div className="text-xs text-green-100">Start Location</div>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <MapPin className="w-4 h-4" />
+                  <span className="font-semibold text-xs">{formData?.destinations?.[0] || formData?.destination}</span>
                 </div>
                 <div className="text-xs text-green-100">Destination</div>
               </div>
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <Calendar className="w-4 h-4" />
-                  <span className="font-semibold">{formData?.numberOfDays} Days</span>
+                  <span className="font-semibold text-xs">{formData?.numberOfDays} Days</span>
                 </div>
                 <div className="text-xs text-green-100">{formData?.startDate} to {endDate}</div>
               </div>
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <Users className="w-4 h-4" />
-                  <span className="font-semibold">{formData?.travelers} Travelers</span>
+                  <span className="font-semibold text-xs">{formData?.travelers} Travelers</span>
                 </div>
                 <div className="text-xs text-green-100">Group Size</div>
               </div>
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <DollarSign className="w-4 h-4" />
-                  <span className="font-semibold capitalize">{formData?.budget}</span>
+                  <span className="font-semibold text-xs capitalize">{formData?.budget}</span>
                 </div>
                 <div className="text-xs text-green-100">Budget Level</div>
               </div>
@@ -540,11 +548,24 @@ const Results = () => {
                     <h3 className="text-2xl font-semibold text-[#2e7f43]">Location Map</h3>
                   </div>
                   <div className="ml-16">
-                    <div className="bg-green-50 border-2 border-[#6da57b]/20 h-80 rounded-lg flex items-center justify-center">
-                      <div className="text-center">
-                        <MapPin className="w-16 h-16 text-[#2e7f43] mx-auto mb-4" />
-                        <p className="text-[#2e7f43] font-semibold text-xl">Interactive Map</p>
-                        <p className="text-gray-600 text-lg mt-2">{currentDayData?.location}</p>
+                    <div className="h-80 rounded-lg overflow-hidden border-2 border-[#6da57b]/20 shadow-lg">
+                      <MapComponent
+                        hotel={currentDayData?.hotel}
+                        attractions={currentDayData?.activities || []}
+                        zoom={14}
+                        className="w-full h-full"
+                      />
+                    </div>
+                    
+                    {/* Map Info */}
+                    <div className="mt-4 p-4 bg-green-50 rounded-lg border border-[#6da57b]/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-4 h-4 bg-[#2e7f43] rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700">Hotel Location</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-[#6da57b] rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700">Attractions & Activities</span>
                       </div>
                     </div>
                     

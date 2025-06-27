@@ -27,6 +27,7 @@ app.use('/api/itinerary', require('./routes/itineraryRoutes'));
 app.use('/api/agent', require('./routes/agentRoutes'));
 app.use('/api/map', require('./routes/mapRoutes'));
 app.use('/api/currency', require('./routes/currencyRoutes'));
+app.use('/api/weather', require('./routes/weatherRoutes'));
 
 // Root route
 app.get('/', (req, res) => {

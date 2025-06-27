@@ -9,7 +9,8 @@ const {
   getHotelDetails,
   planMultiDestinationRoute,
   geocodeMultipleLocations,
-  getMultiDestinationHotels
+  getMultiDestinationHotels,
+  getCityCoordinates
 } = require('../controllers/mapController');
 
 const router = express.Router();
@@ -63,5 +64,10 @@ router.post('/geocode-multiple', geocodeMultipleLocations);
 // @route   POST /api/map/multi-destination-hotels
 // @access  Public
 router.post('/multi-destination-hotels', getMultiDestinationHotels);
+
+// @desc    Get city coordinates
+// @route   GET /api/map/city-coordinates
+// @access  Public
+router.get('/city-coordinates', getCityCoordinates);
 
 module.exports = router;

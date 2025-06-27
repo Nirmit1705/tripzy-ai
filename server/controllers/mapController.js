@@ -273,6 +273,38 @@ const getMultiDestinationHotels = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get city coordinates
+// @route   GET /api/map/city-coordinates
+// @access  Public
+const getCityCoordinates = asyncHandler(async (req, res) => {
+  const { city, all } = req.query;
+  
+  if (all === 'true') {
+    const allCities = mapService.getAllCityCoordinates();
+    res.json({
+      success: true,
+      data: allCities,
+      count: Object.keys(allCities).length
+    });
+    return;
+  }
+  
+  if (!city) {
+    res.status(400);
+    throw new Error('City name is required');
+  }
+
+  const coordinates = mapService.findCityCoordinates(city);
+  res.json({
+    success: true,
+    data: {
+      city,
+      coordinates,
+      found: coordinates !== mapService.getAllCityCoordinates()['Delhi']
+    }
+  });
+});
+
 module.exports = {
   geocodeAddress,
   reverseGeocode,
@@ -283,5 +315,6 @@ module.exports = {
   getHotelDetails,
   planMultiDestinationRoute,
   geocodeMultipleLocations,
-  getMultiDestinationHotels
+  getMultiDestinationHotels,
+  getCityCoordinates
 };

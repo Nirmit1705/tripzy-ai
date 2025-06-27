@@ -6,7 +6,7 @@ AI-powered trip planning backend service that generates personalized travel itin
 
 - User authentication and profile management
 - AI-powered itinerary generation with multi-destination support
-- Starting point and multiple destinations planning
+- Starting location and multiple destinations planning
 - Route optimization for multiple destinations
 - Real-time weather integration
 - Interactive AI agent for trip modifications
