@@ -17,19 +17,27 @@ import {
   Trash2, 
   Play,
   CheckCircle,
-  Clock
+  Clock,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from "../contexts/AuthContext"
 
 const Profile = () => {
   const navigate = useNavigate()
+  const { isAuthenticated, user, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  // Dummy user data
-  const userData = {
-    name: "Nirmit Patel",
-    email: "23it087@charusat.edu.in",
+  // Use real user data or fallback to dummy data
+  const userData = user || {
+    name: "Guest User",
+    email: "guest@example.com",
     profileImage: null 
   }
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   // Dummy saved drafts data
   const savedDrafts = [
@@ -152,14 +160,52 @@ const Profile = () => {
               <a href="#contact" className="text-gray-700 hover:text-[#2e7f43] transition-colors font-medium">Contact</a>
             </div>
 
-            <div className="hidden md:flex space-x-4">
-              <Button 
-                variant="outline" 
-                className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
-                onClick={() => navigate('/login')}
-              >
-                Sign Out
-              </Button>
+            {/* Dynamic Auth Section */}
+            <div className="hidden md:flex items-center space-x-4">
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-center space-x-3">
+                    {user?.profileImage ? (
+                      <img 
+                        src={user.profileImage} 
+                        alt="Profile" 
+                        className="w-8 h-8 rounded-full border-2 border-[#2e7f43]"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-[#2e7f43] to-[#6da57b] rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-700">
+                      Welcome, {user?.name?.split(' ')[0]}
+                    </span>
+                  </div>
+                  <Button 
+                    onClick={handleLogout}
+                    variant="outline" 
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
+                    onClick={() => navigate('/login')}
+                  >
+                    Sign In
+                  </Button>
+                  <Button 
+                    className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white"
+                    onClick={() => navigate('/login')}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )}
             </div>
 
             <button 
@@ -179,13 +225,50 @@ const Profile = () => {
                 <a href="#about" className="text-gray-700 hover:text-[#2e7f43] transition-colors font-medium">About</a>
                 <a href="#contact" className="text-gray-700 hover:text-[#2e7f43] transition-colors font-medium">Contact</a>
                 <div className="flex flex-col space-y-2 pt-4 border-t">
-                  <Button 
-                    variant="outline" 
-                    className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
-                    onClick={() => navigate('/login')}
-                  >
-                    Sign Out
-                  </Button>
+                  {isAuthenticated ? (
+                    <>
+                      <div className="flex items-center space-x-3 py-2">
+                        {user?.profileImage ? (
+                          <img 
+                            src={user.profileImage} 
+                            alt="Profile" 
+                            className="w-8 h-8 rounded-full border-2 border-[#2e7f43]"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-gradient-to-br from-[#2e7f43] to-[#6da57b] rounded-full flex items-center justify-center">
+                            <User className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        <span className="text-sm font-medium text-gray-700">
+                          Welcome, {user?.name?.split(' ')[0]}
+                        </span>
+                      </div>
+                      <Button 
+                        onClick={handleLogout}
+                        variant="outline" 
+                        className="border-red-300 text-red-600 hover:bg-red-50"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Sign Out
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
+                        onClick={() => navigate('/login')}
+                      >
+                        Sign In
+                      </Button>
+                      <Button 
+                        className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white"
+                        onClick={() => navigate('/login')}
+                      >
+                        Sign Up
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

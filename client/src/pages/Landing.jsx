@@ -4,9 +4,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MapPin, Clock, DollarSign, Calendar, Menu, X, Plane, Users, Star, Phone, Mail, Facebook, Twitter, Instagram, Hotel, Car, Ticket, Luggage } from "lucide-react"
 import { useState, useEffect } from "react"
+import { useAuth } from "../contexts/AuthContext"
+import { User, LogOut } from "lucide-react"
 
 const Landing = () => {
   const navigate = useNavigate()
+  const { isAuthenticated, user, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrollY, setScrollY] = useState(0)
   const [carPosition, setCarPosition] = useState(0)
@@ -79,6 +82,11 @@ const Landing = () => {
     { icon: MapPin, x: 90, y: 40, delay: 2.5 },
   ]
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-green-50 to-green-100">
       {/* Navigation Bar */}
@@ -101,20 +109,59 @@ const Landing = () => {
               <a href="#contact" className="text-gray-700 hover:text-[#2e7f43] transition-colors font-medium">Contact</a>
             </div>
 
-            <div className="hidden md:flex space-x-4">
-              <Button 
-                variant="outline" 
-                className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
-                onClick={() => navigate('/login')}
-              >
-                Sign In
-              </Button>
-              <Button 
-                className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white"
-                onClick={() => navigate('/login?mode=signup')}
-              >
-                Sign Up
-              </Button>
+            {/* Dynamic Auth Section */}
+            <div className="hidden md:flex items-center space-x-4">
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-center space-x-3">
+                    {user?.profileImage ? (
+                      <img 
+                        src={user.profileImage} 
+                        alt="Profile" 
+                        className="w-8 h-8 rounded-full border-2 border-[#2e7f43]"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-[#2e7f43] to-[#6da57b] rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-700">
+                      Welcome, {user?.name?.split(' ')[0]}
+                    </span>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/profile')}
+                    variant="outline" 
+                    className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
+                  >
+                    Profile
+                  </Button>
+                  <Button 
+                    onClick={handleLogout}
+                    variant="outline" 
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
+                    onClick={() => navigate('/login')}
+                  >
+                    Sign In
+                  </Button>
+                  <Button 
+                    className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white"
+                    onClick={() => navigate('/login')}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )}
             </div>
 
             <button 
@@ -134,19 +181,57 @@ const Landing = () => {
                 <a href="#about" className="text-gray-700 hover:text-[#2e7f43] transition-colors font-medium">About</a>
                 <a href="#contact" className="text-gray-700 hover:text-[#2e7f43] transition-colors font-medium">Contact</a>
                 <div className="flex flex-col space-y-2 pt-4 border-t">
-                  <Button 
-                    variant="outline" 
-                    className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
-                    onClick={() => navigate('/login')}
-                  >
-                    Sign In
-                  </Button>
-                  <Button 
-                    className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white"
-                    onClick={() => navigate('/login?mode=signup')}
-                  >
-                    Sign Up
-                  </Button>
+                  {isAuthenticated ? (
+                    <>
+                      <div className="flex items-center space-x-3 py-2">
+                        {user?.profileImage ? (
+                          <img 
+                            src={user.profileImage} 
+                            alt="Profile" 
+                            className="w-8 h-8 rounded-full border-2 border-[#2e7f43]"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-gradient-to-br from-[#2e7f43] to-[#6da57b] rounded-full flex items-center justify-center">
+                            <User className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                        <span className="text-sm font-medium text-gray-700">
+                          Welcome, {user?.name?.split(' ')[0]}
+                        </span>
+                      </div>
+                      <Button 
+                        onClick={() => navigate('/profile')}
+                        variant="outline" 
+                        className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
+                      >
+                        Profile
+                      </Button>
+                      <Button 
+                        onClick={handleLogout}
+                        variant="outline" 
+                        className="border-red-300 text-red-600 hover:bg-red-50"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Sign Out
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white"
+                        onClick={() => navigate('/login')}
+                      >
+                        Sign In
+                      </Button>
+                      <Button 
+                        className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white"
+                        onClick={() => navigate('/login')}
+                      >
+                        Sign Up
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -205,14 +290,25 @@ const Landing = () => {
               whileTap={{ scale: 0.95 }}
             >
               <Button 
-                onClick={() => navigate('/plan')}
+                onClick={() => {
+                  if (isAuthenticated) {
+                    navigate('/plan');
+                  } else {
+                    navigate('/login');
+                  }
+                }}
                 size="lg"
                 className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white px-12 py-6 text-xl rounded-full shadow-2xl hover:shadow-3xl transition-all duration-300"
               >
-                Plan My Trip
+                {isAuthenticated ? 'Plan My Trip' : 'Get Started'}
                 <Plane className="ml-2 w-6 h-6" />
               </Button>
             </motion.div>
+            {!isAuthenticated && (
+              <p className="text-sm text-gray-600 mt-4">
+                Sign in to start planning your perfect trip
+              </p>
+            )}
           </motion.div>
         </div>
       </section>

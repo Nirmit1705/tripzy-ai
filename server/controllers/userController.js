@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
+const axios = require('axios');
 const User = require('../models/User');
 const Itinerary = require('../models/Itinerary');
 const generateToken = require('../utils/generateToken');
@@ -207,6 +208,120 @@ const rateTripAndReview = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Google OAuth authentication
+// @route   GET /api/user/auth/google
+// @access  Public
+const googleAuth = asyncHandler(async (req, res) => {
+  const scopes = [
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile'
+  ];
+  
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+    `redirect_uri=${encodeURIComponent(process.env.GOOGLE_REDIRECT_URI)}&` +
+    `scope=${encodeURIComponent(scopes.join(' '))}&` +
+    `response_type=code&` +
+    `access_type=offline&` +
+    `prompt=consent`;
+  
+  console.log('Redirecting to Google OAuth URL:', googleAuthUrl);
+  res.redirect(googleAuthUrl);
+});
+
+// @desc    Google OAuth callback
+// @route   GET /api/user/auth/google/callback
+// @access  Public
+const googleCallback = asyncHandler(async (req, res) => {
+  const { code, error } = req.query;
+  
+  console.log('Google OAuth callback received:', { code: !!code, error });
+  
+  if (error) {
+    console.error('OAuth error:', error);
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_denied`);
+  }
+  
+  if (!code) {
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code`);
+  }
+
+  try {
+    console.log('Exchanging code for token...');
+    // Exchange code for access token
+    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    const { access_token } = tokenResponse.data;
+    console.log('Access token received');
+
+    // Get user info from Google
+    const userResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`
+      }
+    });
+    
+    const { email, name, picture, verified_email } = userResponse.data;
+    console.log('User info received:', { email, name, verified_email });
+
+    // Ensure email is verified
+    if (!verified_email) {
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=email_not_verified`);
+    }
+
+    // Check if user exists
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      console.log('Creating new user...');
+      // Create new user
+      user = await User.create({
+        name,
+        email,
+        profileImage: picture,
+        isGoogleUser: true,
+        preferences: {
+          currency: 'USD'
+        }
+      });
+    } else if (!user.isGoogleUser) {
+      console.log('Updating existing user to Google user...');
+      // Update existing user to Google user
+      user.isGoogleUser = true;
+      user.profileImage = picture;
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    // Redirect to frontend login page with token and user data
+    const userData = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      profileImage: user.profileImage
+    };
+
+    console.log('Redirecting to frontend with user data');
+    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}&user=${encodeURIComponent(JSON.stringify(userData))}`);
+
+  } catch (error) {
+    console.error('Google OAuth error:', error.response?.data || error.message);
+    res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
+  }
+});
+
 // Helper function to update user trip history
 const updateUserTripHistory = async (userId, pastTrips) => {
   const user = await User.findById(userId);
@@ -278,5 +393,7 @@ module.exports = {
   getTripHistory,
   getCurrentTrips,
   getTravelStats,
-  rateTripAndReview
+  rateTripAndReview,
+  googleAuth,
+  googleCallback
 };

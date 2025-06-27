@@ -13,7 +13,17 @@ const userSchema = mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: function() {
+      return !this.isGoogleUser;
+    }
+  },
+  isGoogleUser: {
+    type: Boolean,
+    default: false
+  },
+  profileImage: {
+    type: String,
+    default: null
   },
   preferences: {
     budget: String,
@@ -57,15 +67,19 @@ const userSchema = mongoose.Schema({
 });
 
 userSchema.methods.matchPassword = async function(enteredPassword) {
+  if (this.isGoogleUser) {
+    return false; // Google users don't have passwords
+  }
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
+  if (!this.isModified('password') || this.isGoogleUser) {
     next();
+  } else {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
   }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
 });
 
 module.exports = mongoose.model('User', userSchema);

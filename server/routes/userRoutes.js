@@ -7,10 +7,17 @@ const {
   getTripHistory,
   getCurrentTrips,
   getTravelStats,
-  rateTripAndReview
+  rateTripAndReview,
+  googleAuth,
+  googleCallback
 } = require('../controllers/userController');
 const { protect } = require('../middlewares/authMiddleware');
 
+// Google OAuth routes
+router.get('/auth/google', googleAuth);
+router.get('/auth/google/callback', googleCallback);
+
+// Traditional routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.route('/profile').get(protect, getUserProfile);
