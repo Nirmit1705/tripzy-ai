@@ -10,6 +10,7 @@ const generateItinerary = asyncHandler(async (req, res) => {
   console.log('Request body:', req.body);
 
   const {
+    startLocation,
     destinations,
     startDate,
     numberOfDays,
@@ -23,6 +24,11 @@ const generateItinerary = asyncHandler(async (req, res) => {
   } = req.body;
 
   // Validate required fields
+  if (!startLocation) {
+    res.status(400);
+    throw new Error('Start location is required');
+  }
+
   if (!destinations || destinations.length === 0) {
     res.status(400);
     throw new Error('At least one destination is required');
@@ -41,12 +47,13 @@ const generateItinerary = asyncHandler(async (req, res) => {
   // Create itinerary object
   const itineraryData = {
     user: req.user._id,
-    title: `Trip to ${destinations.join(', ')}`,
+    title: `Trip from ${startLocation} to ${destinations.join(', ')}`,
+    startLocation,
     destinations: destinations.map(dest => ({
       name: dest,
       coordinates: null // Will be filled by geocoding service later
     })),
-    startingPoint: startingPoint || destinations[0],
+    startingPoint: startingPoint || startLocation,
     startDate: start,
     endDate: end,
     numberOfDays: parseInt(numberOfDays),
@@ -105,11 +112,13 @@ const saveDraftItinerary = asyncHandler(async (req, res) => {
   // Create minimal itinerary for draft
   const draftData = {
     user: req.user._id,
-    title: formData.title || `Draft - ${formData.destinations?.[0] || 'New Trip'}`,
+    title: formData.title || `Draft - ${formData.startLocation || 'Unknown'} to ${formData.destinations?.[0] || 'New Trip'}`,
+    startLocation: formData.startLocation || '',
     destinations: (formData.destinations || []).map(dest => ({
       name: dest,
       coordinates: null
     })),
+    startingPoint: formData.startingPoint || formData.startLocation || '',
     startDate: formData.startDate ? new Date(formData.startDate) : new Date(),
     numberOfDays: parseInt(formData.numberOfDays) || 3,
     budget: formData.budget || 'moderate',

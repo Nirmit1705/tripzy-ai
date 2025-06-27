@@ -16,6 +16,7 @@ const TripForm = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { register, handleSubmit, setValue, watch } = useForm({
     defaultValues: {
+      startLocation: "",
       destinations: [],
       startDate: "",
       numberOfDays: 3,
@@ -33,6 +34,7 @@ const TripForm = () => {
   const [selectedCurrency, setSelectedCurrency] = useState("INR")
   const [destinationsList, setDestinationsList] = useState([])
   const [currentDestination, setCurrentDestination] = useState("")
+  const [startLocation, setStartLocation] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
@@ -110,6 +112,7 @@ const TripForm = () => {
         
         // Store form data for after login
         const formDataToStore = {
+          startLocation,
           destinations: destinationsList,
           startDate: data.startDate,
           numberOfDays: parseInt(data.numberOfDays),
@@ -119,7 +122,7 @@ const TripForm = () => {
           startTime: data.startTime,
           endTime: data.endTime,
           currency: selectedCurrency,
-          title: `Trip to ${destinationsList.join(', ')}`
+          title: `Trip from ${startLocation} to ${destinationsList.join(', ')}`
         }
         
         sessionStorage.setItem('pendingTripForm', JSON.stringify(formDataToStore))
@@ -129,6 +132,7 @@ const TripForm = () => {
 
       // Prepare form data for backend
       const formData = {
+        startLocation,
         destinations: destinationsList,
         startDate: data.startDate,
         numberOfDays: parseInt(data.numberOfDays),
@@ -138,7 +142,7 @@ const TripForm = () => {
         startTime: data.startTime,
         endTime: data.endTime,
         currency: selectedCurrency,
-        title: `Trip to ${destinationsList.join(', ')}`
+        title: `Trip from ${startLocation} to ${destinationsList.join(', ')}`
       }
 
       console.log('Submitting authenticated form data:', formData)
@@ -351,42 +355,64 @@ const TripForm = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Left Column */}
                     <div className="space-y-6">
-                      {/* Destination */}
-                      <div className="space-y-2">
-                        <Label htmlFor="destination" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
-                          <MapPin className="w-5 h-5" />
-                          Destinations
-                        </Label>
-                        <Input
-                          id="destination"
-                          placeholder="Type destination and press Enter to add"
-                          className="border-[#6da57b] focus:ring-[#2e7f43] h-10 text-base"
-                          value={currentDestination}
-                          onChange={(e) => setCurrentDestination(e.target.value)}
-                          onKeyPress={handleDestinationKeyPress}
-                        />
-                        
-                        {/* Destination Tags */}
-                        {destinationsList.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            {destinationsList.map((destination, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-1 bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white px-3 py-1 rounded-full text-sm font-medium"
-                              >
-                                <span>{destination}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => removeDestination(destination)}
-                                  className="ml-1 hover:bg-white hover:bg-opacity-20 rounded-full p-0.5 transition-colors"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      {/* Start Location and Destinations - Same Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Start Location */}
+                        <div className="space-y-2">
+                          <Label htmlFor="startLocation" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
+                            <MapPin className="w-5 h-5" />
+                            Start Location
+                          </Label>
+                          <Input
+                            id="startLocation"
+                            placeholder="Enter your starting point"
+                            className="border-[#6da57b] focus:ring-[#2e7f43] h-10 text-base"
+                            value={startLocation}
+                            onChange={(e) => {
+                              setStartLocation(e.target.value)
+                              setValue("startLocation", e.target.value)
+                            }}
+                            required
+                          />
+                        </div>
+
+                        {/* Destinations */}
+                        <div className="space-y-2">
+                          <Label htmlFor="destination" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
+                            <MapPin className="w-5 h-5" />
+                            Destinations
+                          </Label>
+                          <Input
+                            id="destination"
+                            placeholder="Type destination and press Enter"
+                            className="border-[#6da57b] focus:ring-[#2e7f43] h-10 text-base"
+                            value={currentDestination}
+                            onChange={(e) => setCurrentDestination(e.target.value)}
+                            onKeyPress={handleDestinationKeyPress}
+                          />
+                        </div>
                       </div>
+                      
+                      {/* Destination Tags */}
+                      {destinationsList.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {destinationsList.map((destination, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-1 bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white px-3 py-1 rounded-full text-sm font-medium"
+                            >
+                              <span>{destination}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeDestination(destination)}
+                                className="ml-1 hover:bg-white hover:bg-opacity-20 rounded-full p-0.5 transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Start Date and Number of Days */}
                       <div className="grid grid-cols-2 gap-4 items-end">
@@ -563,7 +589,7 @@ const TripForm = () => {
                     <div className="flex justify-center">
                       <Button 
                         type="submit" 
-                        disabled={isSubmitting || destinationsList.length === 0}
+                        disabled={isSubmitting || destinationsList.length === 0 || !startLocation.trim()}
                         className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white py-4 px-12 text-xl font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" 
                         size="lg"
                       >
@@ -578,9 +604,9 @@ const TripForm = () => {
                       </Button>
                     </div>
                     
-                    {destinationsList.length === 0 && (
+                    {(destinationsList.length === 0 || !startLocation.trim()) && (
                       <p className="text-sm text-gray-500 text-center mt-2">
-                        Please add at least one destination to continue
+                        Please add start location and at least one destination to continue
                       </p>
                     )}
                   </div>

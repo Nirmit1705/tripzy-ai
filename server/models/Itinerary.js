@@ -62,6 +62,10 @@ const itinerarySchema = mongoose.Schema({
     required: true
   },
   destinations: [destinationSchema],
+  startLocation: {
+    type: String,
+    required: true
+  },
   startingPoint: {
     type: String,
     required: true
