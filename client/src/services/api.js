@@ -119,6 +119,13 @@ class ApiService {
       body: JSON.stringify({ itinerary, userRequest })
     });
   }
+
+  // Regenerate itinerary with AI
+  async regenerateItinerary(itineraryId) {
+    return this.apiCall(`/itinerary/${itineraryId}/regenerate`, {
+      method: 'PUT'
+    });
+  }
 }
 
 // Export singleton instance

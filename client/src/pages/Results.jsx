@@ -19,6 +19,8 @@ const Results = () => {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState('');
 
   useEffect(() => {
     // Get form data from sessionStorage
@@ -67,40 +69,50 @@ const Results = () => {
   const generateItineraryFromDatabase = (dbItinerary, formData) => {
     console.log('Processing database itinerary:', dbItinerary);
     
-    // For now, use the database metadata but generate mock daily data
-    // Later this will be replaced with actual AI-generated content
-    const days = parseInt(formData.numberOfDays) || 3;
-    const mockItinerary = [];
-    
-    for (let i = 1; i <= days; i++) {
-      mockItinerary.push({
-        day: i,
-        location: `${formData.destinations?.[0] || 'Destination'} - Day ${i}`,
+    // Check if we have AI-generated daily itinerary
+    if (dbItinerary.dailyItinerary && dbItinerary.dailyItinerary.length > 0) {
+      console.log('Using AI-generated daily itinerary');
+      
+      // Convert database format to display format
+      const processedItinerary = dbItinerary.dailyItinerary.map(day => ({
+        day: day.day,
+        location: day.location,
+        date: day.date,
         hotel: {
-          name: `Hotel for Day ${i}`,
-          address: `Address in ${formData.destinations?.[0] || 'destination'}`,
-          rating: 4.0 + Math.random(),
-          price: formData.budget === 'low' ? '₹2000' : formData.budget === 'moderate' ? '₹4000' : '₹8000'
+          name: day.accommodation?.name || 'Hotel not specified',
+          address: day.accommodation?.address || 'Address not available',
+          rating: day.accommodation?.rating || 3,
+          price: `${day.accommodation?.currency || '₹'}${day.accommodation?.price || 0}`
         },
         transport: {
-          mode: i === 1 ? 'Flight' : 'Local Transport',
-          details: i === 1 ? 'Flight to destination' : 'Local transportation',
-          cost: i === 1 ? '₹5000' : '₹500'
+          mode: day.transportation?.mode || 'Local Transport',
+          details: day.transportation?.details || 'Transportation details not available',
+          cost: `${day.transportation?.currency || '₹'}${day.transportation?.cost || 0}`
         },
-        activities: [
-          `Morning: Explore local attractions`,
-          `Afternoon: Cultural experiences`,
-          `Evening: Local cuisine and nightlife`
-        ],
-        weather: {
-          temp: `${25 + Math.floor(Math.random() * 10)}°C`,
-          condition: ['Sunny', 'Partly Cloudy', 'Clear'][i % 3],
-          humidity: `${50 + Math.floor(Math.random() * 30)}%`
-        }
-      });
+        activities: day.activities || ['No activities planned'],
+        meals: {
+          breakfast: day.meals?.breakfast || 'Breakfast not planned',
+          lunch: day.meals?.lunch || 'Lunch not planned',
+          dinner: day.meals?.dinner || 'Dinner not planned'
+        },
+        weather: day.weather || {
+          temp: '25°C',
+          condition: 'Sunny',
+          humidity: '60%'
+        },
+        estimatedCost: day.estimatedCost || 0
+      }));
+      
+      setItinerary(processedItinerary);
+      
+      // Store the itinerary ID for regeneration
+      if (dbItinerary._id) {
+        sessionStorage.setItem('currentItineraryId', dbItinerary._id);
+      }
+    } else {
+      console.log('No AI-generated content, using fallback');
+      generateMockItinerary(formData);
     }
-    
-    setItinerary(mockItinerary);
   };
 
   const generateMockItinerary = (data) => {
@@ -198,6 +210,59 @@ const Results = () => {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleRegenerateItinerary = async () => {
+    const itineraryId = sessionStorage.getItem('currentItineraryId');
+    
+    if (!itineraryId) {
+      setRegenerateError('Cannot regenerate - itinerary ID not found');
+      return;
+    }
+
+    setIsRegenerating(true);
+    setRegenerateError('');
+
+    try {
+      console.log('Regenerating itinerary:', itineraryId);
+      
+      const response = await apiService.regenerateItinerary(itineraryId);
+      
+      if (response.success) {
+        console.log('Itinerary regenerated successfully');
+        
+        // Update the display with new data
+        const formData = JSON.parse(sessionStorage.getItem('tripFormData'));
+        generateItineraryFromDatabase(response.data, formData);
+        
+        // Update stored itinerary data
+        sessionStorage.setItem('itineraryData', JSON.stringify(response.data));
+        
+        // Add success message to chat
+        const successMessage = {
+          id: Date.now(),
+          type: 'bot',
+          message: 'Great! I\'ve regenerated your itinerary with fresh recommendations. Check out the updated activities, accommodations, and suggestions!'
+        };
+        setChatMessages(prev => [...prev, successMessage]);
+        
+      } else {
+        throw new Error(response.message || 'Failed to regenerate itinerary');
+      }
+    } catch (error) {
+      console.error('Regeneration failed:', error);
+      setRegenerateError(error.message || 'Failed to regenerate itinerary');
+      
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now(),
+        type: 'bot',
+        message: 'Sorry, I had trouble regenerating your itinerary. Please try again or let me know if you need help with specific changes.'
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   if (!formData) {
@@ -422,6 +487,44 @@ const Results = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* AI Controls Section */}
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Bot className="w-6 h-6 text-blue-600" />
+            <h3 className="text-xl font-semibold text-gray-800">AI Assistant</h3>
+          </div>
+          
+          <Button
+            onClick={handleRegenerateItinerary}
+            disabled={isRegenerating}
+            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+          >
+            {isRegenerating ? (
+              <>
+                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                Regenerating...
+              </>
+            ) : (
+              <>
+                <Bot className="w-4 h-4 mr-2" />
+                Regenerate Itinerary
+              </>
+            )}
+          </Button>
+        </div>
+        
+        {regenerateError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+            {regenerateError}
+          </div>
+        )}
+        
+        <p className="text-gray-600 text-sm">
+          Not satisfied with your itinerary? Let me create a fresh set of recommendations with different activities, restaurants, and accommodations!
+        </p>
       </div>
 
       {/* Main Content - Two Columns with 60:40 ratio */}

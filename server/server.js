@@ -6,6 +6,7 @@ require('./config/env');
 
 const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middlewares/errorMiddleware');
+const startupCheck = require('./startup-check');
 
 console.log('Starting TripzyAI server...');
 console.log('Environment:', process.env.NODE_ENV);
@@ -38,8 +39,20 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+async function startServer() {
+  try {
+    await startupCheck();
+    
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`\nServer running on http://localhost:${PORT}`);
+      console.log('API docs: http://localhost:${PORT}/api');
+      console.log('AI features: Enabled');
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+startServer();

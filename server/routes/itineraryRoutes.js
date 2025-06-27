@@ -6,7 +6,8 @@ const {
   getItinerary,
   saveDraftItinerary,
   updateItinerary,
-  deleteItinerary
+  deleteItinerary,
+  regenerateItinerary
 } = require('../controllers/itineraryController');
 const { protect } = require('../middlewares/authMiddleware');
 
@@ -16,6 +17,7 @@ router.post('/save-draft', protect, saveDraftItinerary);
 router.get('/', protect, getUserItineraries);
 router.get('/:id', protect, getItinerary);
 router.put('/:id', protect, updateItinerary);
+router.put('/:id/regenerate', protect, regenerateItinerary);
 router.delete('/:id', protect, deleteItinerary);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const Itinerary = require('../models/Itinerary');
 const User = require('../models/User');
+const itineraryGeneratorService = require('../services/itineraryGeneratorService');
 
 // @desc    Generate new itinerary from form data
 // @route   POST /api/itinerary/generate
@@ -51,7 +52,7 @@ const generateItinerary = asyncHandler(async (req, res) => {
     startLocation,
     destinations: destinations.map(dest => ({
       name: dest,
-      coordinates: null // Will be filled by geocoding service later
+      coordinates: null
     })),
     startingPoint: startingPoint || startLocation,
     startDate: start,
@@ -71,36 +72,64 @@ const generateItinerary = asyncHandler(async (req, res) => {
 
   console.log('Creating itinerary with data:', itineraryData);
 
-  // Save to database
+  // Save initial itinerary to database
   const itinerary = await Itinerary.create(itineraryData);
   console.log('Itinerary created successfully:', itinerary._id);
 
-  // Update user's travel stats - Fix the path
   try {
-    const updateResult = await User.findByIdAndUpdate(
-      req.user._id, 
-      { 
-        $inc: { 'travelStats.totalDrafts': 1 },
-        $set: { 'travelStats.lastTripDate': new Date() }
-      },
-      { new: true }
-    );
-    console.log('User stats updated:', updateResult?.travelStats);
-  } catch (statsError) {
-    console.error('Error updating user stats:', statsError);
-    // Don't fail the whole operation if stats update fails
-  }
+    // Generate detailed itinerary using LLM
+    console.log('Generating detailed itinerary with LLM...');
+    const generationResult = await itineraryGeneratorService.generateFullItinerary(itinerary);
 
-  res.status(201).json({
-    success: true,
-    message: 'Itinerary created successfully',
-    data: itinerary,
-    meta: {
-      formDataStored: true,
-      readyForGeneration: true,
-      userStatsUpdated: true
+    if (generationResult.success) {
+      // Update the itinerary with generated content
+      itinerary.dailyItinerary = generationResult.dailyItinerary;
+      itinerary.totalCost = generationResult.totalCost;
+      itinerary.estimatedCost = generationResult.totalCost;
+      itinerary.status = 'generated';
+      itinerary.aiModel = generationResult.aiModel;
+      itinerary.generatedBy = 'ai';
+
+      await itinerary.save();
+      console.log('Itinerary updated with AI-generated content');
+
+      // Update user stats
+      await User.findByIdAndUpdate(
+        req.user._id,
+        {
+          $inc: { 'travelStats.totalDrafts': 1 },
+          $set: { 'travelStats.lastTripDate': new Date() }
+        }
+      );
+
+      res.status(201).json({
+        success: true,
+        message: 'Itinerary generated successfully with AI assistance',
+        data: itinerary,
+        meta: {
+          aiGenerated: true,
+          model: generationResult.aiModel,
+          totalCost: generationResult.totalCost
+        }
+      });
+    } else {
+      throw new Error('Failed to generate detailed itinerary');
     }
-  });
+
+  } catch (generationError) {
+    console.error('LLM generation failed:', generationError);
+    
+    // Still return the basic itinerary even if AI generation fails
+    res.status(201).json({
+      success: true,
+      message: 'Itinerary created successfully (AI generation partially failed)',
+      data: itinerary,
+      meta: {
+        aiGenerated: false,
+        warning: 'AI content generation failed, please regenerate later'
+      }
+    });
+  }
 });
 
 // @desc    Save draft itinerary (without full generation)
@@ -240,11 +269,61 @@ const deleteItinerary = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Regenerate itinerary content with AI
+// @route   PUT /api/itinerary/:id/regenerate
+// @access  Private
+const regenerateItinerary = asyncHandler(async (req, res) => {
+  const itinerary = await Itinerary.findById(req.params.id);
+
+  if (!itinerary) {
+    res.status(404);
+    throw new Error('Itinerary not found');
+  }
+
+  // Check if user owns this itinerary
+  if (itinerary.user.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error('Not authorized to regenerate this itinerary');
+  }
+
+  try {
+    console.log('Regenerating itinerary with AI:', itinerary._id);
+    
+    const generationResult = await itineraryGeneratorService.generateFullItinerary(itinerary);
+
+    if (generationResult.success) {
+      // Update with new generated content
+      itinerary.dailyItinerary = generationResult.dailyItinerary;
+      itinerary.totalCost = generationResult.totalCost;
+      itinerary.estimatedCost = generationResult.totalCost;
+      itinerary.status = 'generated';
+      itinerary.aiModel = generationResult.aiModel;
+      itinerary.generatedBy = 'ai';
+
+      await itinerary.save();
+
+      res.json({
+        success: true,
+        message: 'Itinerary regenerated successfully',
+        data: itinerary
+      });
+    } else {
+      throw new Error('Failed to regenerate itinerary');
+    }
+
+  } catch (error) {
+    console.error('Regeneration failed:', error);
+    res.status(500);
+    throw new Error('Failed to regenerate itinerary with AI');
+  }
+});
+
 module.exports = {
   generateItinerary,
   saveDraftItinerary,
   getUserItineraries,
   getItinerary,
   updateItinerary,
-  deleteItinerary
+  deleteItinerary,
+  regenerateItinerary
 };
