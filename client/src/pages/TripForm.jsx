@@ -94,6 +94,55 @@ const TripForm = () => {
     setIsSubmitting(true)
     setSubmitError('')
 
+    // Validate all required fields
+    if (!startLocation.trim()) {
+      setSubmitError('Start location is required')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (destinationsList.length === 0) {
+      setSubmitError('At least one destination is required')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!data.startDate) {
+      setSubmitError('Start date is required')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!data.numberOfDays || data.numberOfDays < 1) {
+      setSubmitError('Number of days is required and must be at least 1')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!data.travelers || data.travelers < 1) {
+      setSubmitError('Number of travelers is required and must be at least 1')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!selectedBudget) {
+      setSubmitError('Budget selection is required')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!data.startTime) {
+      setSubmitError('Start time is required')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!data.endTime) {
+      setSubmitError('End time is required')
+      setIsSubmitting(false)
+      return
+    }
+
     try {
       // Check authentication status more thoroughly
       const authCheck = checkAuthStatus()
@@ -179,6 +228,18 @@ const TripForm = () => {
       setIsSubmitting(false)
     }
   }
+
+  // Check if all required fields are filled
+  const watchedFields = watch()
+  const isFormValid = 
+    startLocation.trim() !== '' &&
+    destinationsList.length > 0 &&
+    watchedFields.startDate !== '' &&
+    watchedFields.numberOfDays > 0 &&
+    watchedFields.travelers > 0 &&
+    selectedBudget !== '' &&
+    watchedFields.startTime !== '' &&
+    watchedFields.endTime !== ''
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-green-50 to-green-100">
@@ -361,7 +422,7 @@ const TripForm = () => {
                         <div className="space-y-2">
                           <Label htmlFor="startLocation" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                             <MapPin className="w-5 h-5" />
-                            Start Location
+                            Start Location *
                           </Label>
                           <Input
                             id="startLocation"
@@ -380,7 +441,7 @@ const TripForm = () => {
                         <div className="space-y-2">
                           <Label htmlFor="destination" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                             <MapPin className="w-5 h-5" />
-                            Destinations
+                            Destinations *
                           </Label>
                           <Input
                             id="destination"
@@ -389,6 +450,7 @@ const TripForm = () => {
                             value={currentDestination}
                             onChange={(e) => setCurrentDestination(e.target.value)}
                             onKeyPress={handleDestinationKeyPress}
+                            required={destinationsList.length === 0}
                           />
                         </div>
                       </div>
@@ -419,17 +481,18 @@ const TripForm = () => {
                         <div className="space-y-3">
                           <Label htmlFor="startDate" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                             <Calendar className="w-5 h-5" />
-                            Start Date
+                            Start Date *
                           </Label>
                           <Input
                             id="startDate"
                             type="date"
                             className="border-[#6da57b] focus:ring-[#2e7f43] h-12 text-base"
-                            {...register("startDate", { required: true })}
+                            {...register("startDate", { required: "Start date is required" })}
+                            required
                           />
                         </div>
                         <div className="space-y-3">
-                          <Label htmlFor="numberOfDays" className="text-[#2e7f43] font-semibold text-base">Number of Days</Label>
+                          <Label htmlFor="numberOfDays" className="text-[#2e7f43] font-semibold text-base">Number of Days *</Label>
                           <Input
                             id="numberOfDays"
                             type="number"
@@ -437,7 +500,12 @@ const TripForm = () => {
                             max="30"
                             placeholder="3"
                             className="border-[#6da57b] focus:ring-[#2e7f43] h-12 text-base"
-                            {...register("numberOfDays", { required: true })}
+                            {...register("numberOfDays", { 
+                              required: "Number of days is required",
+                              min: { value: 1, message: "Must be at least 1 day" },
+                              max: { value: 30, message: "Cannot exceed 30 days" }
+                            })}
+                            required
                           />
                         </div>
                       </div>
@@ -447,22 +515,24 @@ const TripForm = () => {
                         <div className="space-y-3">
                           <Label htmlFor="startTime" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                             <Clock className="w-5 h-5" />
-                            Start Time
+                            Start Time *
                           </Label>
                           <Input
                             id="startTime"
                             type="time"
                             className="border-[#6da57b] focus:ring-[#2e7f43] h-12 text-base"
-                            {...register("startTime")}
+                            {...register("startTime", { required: "Start time is required" })}
+                            required
                           />
                         </div>
                         <div className="space-y-3">
-                          <Label htmlFor="endTime" className="text-[#2e7f43] font-semibold text-base">End Time</Label>
+                          <Label htmlFor="endTime" className="text-[#2e7f43] font-semibold text-base">End Time *</Label>
                           <Input
                             id="endTime"
                             type="time"
                             className="border-[#6da57b] focus:ring-[#2e7f43] h-12 text-base"
-                            {...register("endTime")}
+                            {...register("endTime", { required: "End time is required" })}
+                            required
                           />
                         </div>
                       </div>
@@ -471,7 +541,7 @@ const TripForm = () => {
                       <div className="space-y-3">
                         <Label htmlFor="travelers" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                           <Users className="w-5 h-5" />
-                          Number of Travelers
+                          Number of Travelers *
                         </Label>
                         <Input
                           id="travelers"
@@ -479,7 +549,12 @@ const TripForm = () => {
                           min="1"
                           max="20"
                           className="border-[#6da57b] focus:ring-[#2e7f43] h-12 text-base"
-                          {...register("travelers", { required: true })}
+                          {...register("travelers", { 
+                            required: "Number of travelers is required",
+                            min: { value: 1, message: "Must be at least 1 traveler" },
+                            max: { value: 20, message: "Cannot exceed 20 travelers" }
+                          })}
+                          required
                         />
                       </div>
 
@@ -487,7 +562,7 @@ const TripForm = () => {
                       <div className="space-y-3">
                         <Label htmlFor="currency" className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                           <DollarSign className="w-5 h-5" />
-                          Preferred Currency
+                          Preferred Currency *
                         </Label>
                         <select
                           id="currency"
@@ -497,6 +572,7 @@ const TripForm = () => {
                             setSelectedCurrency(e.target.value)
                             setValue("currency", e.target.value)
                           }}
+                          required
                         >
                           {currencies.map((currency) => (
                             <option key={currency.value} value={currency.value}>
@@ -513,7 +589,7 @@ const TripForm = () => {
                       <div className="space-y-4">
                         <Label className="flex items-center gap-2 text-[#2e7f43] font-semibold text-base">
                           <DollarSign className="w-5 h-5" />
-                          Budget Range
+                          Budget Range *
                         </Label>
                         <div className="space-y-3">
                           {budgetOptions.map((option) => (
@@ -555,7 +631,7 @@ const TripForm = () => {
 
                       {/* Interests */}
                       <div className="space-y-4">
-                        <Label className="text-[#2e7f43] font-semibold text-base">Select Your Interests</Label>
+                        <Label className="text-[#2e7f43] font-semibold text-base">Select Your Interests *</Label>
                         <div className="grid grid-cols-3 gap-2">
                           {interests.map((interest) => (
                             <Button
@@ -589,7 +665,7 @@ const TripForm = () => {
                     <div className="flex justify-center">
                       <Button 
                         type="submit" 
-                        disabled={isSubmitting || destinationsList.length === 0 || !startLocation.trim()}
+                        disabled={isSubmitting || !isFormValid}
                         className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white py-4 px-12 text-xl font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" 
                         size="lg"
                       >
@@ -604,9 +680,9 @@ const TripForm = () => {
                       </Button>
                     </div>
                     
-                    {(destinationsList.length === 0 || !startLocation.trim()) && (
+                    {!isFormValid && (
                       <p className="text-sm text-gray-500 text-center mt-2">
-                        Please add start location and at least one destination to continue
+                        Please fill all required fields marked with * to continue
                       </p>
                     )}
                   </div>
