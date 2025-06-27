@@ -104,6 +104,21 @@ class ApiService {
   async getCurrentTrips() {
     return this.apiCall('/user/current-trips');
   }
+
+  // Agent API methods
+  async chatWithAgent(message, context = {}) {
+    return this.apiCall('/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, context })
+    });
+  }
+
+  async updateItineraryViaAgent(itinerary, userRequest) {
+    return this.apiCall('/agent/update', {
+      method: 'POST',
+      body: JSON.stringify({ itinerary, userRequest })
+    });
+  }
 }
 
 // Export singleton instance

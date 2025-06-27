@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middlewares/authMiddleware');
+const { chatWithAgent, updateItinerary } = require('../controllers/agentController');
 
-// Placeholder routes - implement these controllers as needed
-router.post('/chat', protect, (req, res) => {
-  res.json({ message: 'AI agent chat endpoint' });
-});
+router.post('/chat', protect, chatWithAgent);
+router.post('/update', protect, updateItinerary);
 
+module.exports = router;
 router.post('/update', protect, (req, res) => {
   res.json({ message: 'Update itinerary via AI endpoint' });
 });

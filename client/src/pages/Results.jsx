@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, Calendar, Users, DollarSign, Clock, Star, Cloud, Hotel, Car, Plane, Send, Bot, User, Menu, X, LogOut } from 'lucide-react';
-import { Button } from "@/components/ui/button"
-import { useNavigate } from "react-router-dom"
-import { useAuth } from "../contexts/AuthContext"
+import { Button } from "@/components/ui/button";
+import { Bot, Calendar, Car, Cloud, DollarSign, Hotel, LogOut, MapPin, Menu, Plane, Send, Star, User, Users, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import apiService from "../services/api";
 
 const Results = () => {
   const navigate = useNavigate()
@@ -16,6 +17,7 @@ const Results = () => {
     { id: 1, type: 'bot', message: "Hello! I'm your travel assistant. How can I help you with your trip?" }
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Get form data from sessionStorage
@@ -135,26 +137,60 @@ const Results = () => {
     setItinerary(mockItinerary);
   };
 
-  const handleSendMessage = () => {
-    if (chatInput.trim()) {
-      const newMessage = {
-        id: chatMessages.length + 1,
+  const handleSendMessage = async () => {
+    if (chatInput.trim() && !isLoading) {
+      const userMessage = chatInput.trim();
+      const newUserMessage = {
+        id: Date.now(),
         type: 'user',
-        message: chatInput
+        message: userMessage
       };
       
-      setChatMessages([...chatMessages, newMessage]);
+      setChatMessages(prev => [...prev, newUserMessage]);
       setChatInput('');
+      setIsLoading(true);
       
-      // Simulate bot response
-      setTimeout(() => {
-        const botResponse = {
-          id: chatMessages.length + 2,
+      try {
+        // Add loading message
+        const loadingMessage = {
+          id: Date.now() + 1,
           type: 'bot',
-          message: "I understand your question. Let me help you with that information about your trip."
+          message: 'Thinking...',
+          isLoading: true
         };
-        setChatMessages(prev => [...prev, botResponse]);
-      }, 1000);
+        setChatMessages(prev => [...prev, loadingMessage]);
+
+        // Call the chat API
+        const response = await apiService.chatWithAgent(userMessage, {
+          itinerary: formData,
+          currentDay: selectedDay
+        });
+
+        // Remove loading message and add real response
+        setChatMessages(prev => {
+          const withoutLoading = prev.filter(msg => !msg.isLoading);
+          return [...withoutLoading, {
+            id: Date.now() + 2,
+            type: 'bot',
+            message: response.message || 'I apologize, but I encountered an issue. Please try again.'
+          }];
+        });
+
+      } catch (error) {
+        console.error('Chat error:', error);
+        
+        // Remove loading message and add error response
+        setChatMessages(prev => {
+          const withoutLoading = prev.filter(msg => !msg.isLoading);
+          return [...withoutLoading, {
+            id: Date.now() + 2,
+            type: 'bot',
+            message: 'I apologize, but I\'m having trouble responding right now. Please try again in a moment.'
+          }];
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -550,6 +586,11 @@ const Results = () => {
                     <span className="text-xs opacity-75">{msg.type === 'bot' ? 'Assistant' : 'You'}</span>
                   </div>
                   <p className="text-sm">{msg.message}</p>
+                  {msg.isLoading && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -562,15 +603,21 @@ const Results = () => {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2e7f43]"
+                onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+                placeholder={isLoading ? "AI is typing..." : "Type your message..."}
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2e7f43] disabled:opacity-50"
               />
               <button
                 onClick={handleSendMessage}
-                className="bg-[#2e7f43] text-white px-4 py-2 rounded-lg hover:bg-[#245f35] transition-colors"
+                disabled={isLoading || !chatInput.trim()}
+                className="bg-[#2e7f43] text-white px-4 py-2 rounded-lg hover:bg-[#245f35] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Send className="w-4 h-4" />
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>

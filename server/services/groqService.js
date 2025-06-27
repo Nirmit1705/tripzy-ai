@@ -7,13 +7,47 @@ class GroqService {
   }
 
   async generateCompletion(prompt, options = {}) {
-    // Implementation for Groq API calls
-    return { message: 'Groq service implementation needed' };
+    try {
+      const response = await axios.post(`${this.baseURL}/completions`, {
+        model: options.model || 'llama3-8b-8192',
+        prompt: prompt,
+        max_tokens: options.maxTokens || 1024,
+        temperature: options.temperature || 0.7,
+        stream: false
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Groq API error:', error.response?.data || error.message);
+      throw new Error(`Groq API error: ${error.response?.data?.error?.message || error.message}`);
+    }
   }
 
   async chatCompletion(messages, options = {}) {
-    // Implementation for chat completions
-    return { message: 'Chat completion implementation needed' };
+    try {
+      const response = await axios.post(`${this.baseURL}/chat/completions`, {
+        model: options.model || 'llama3-8b-8192',
+        messages: messages,
+        max_tokens: options.maxTokens || 1024,
+        temperature: options.temperature || 0.7,
+        stream: false
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Groq chat completion error:', error.response?.data || error.message);
+      throw new Error(`Groq API error: ${error.response?.data?.error?.message || error.message}`);
+    }
   }
 }
 
