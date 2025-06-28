@@ -92,6 +92,12 @@ class ApiService {
     });
   }
 
+  async saveItinerary(id) {
+    return this.apiCall(`/itinerary/${id}/save`, {
+      method: 'PUT'
+    });
+  }
+
   // User API methods
   async getUserProfile() {
     return this.apiCall('/user/profile');
@@ -120,14 +126,48 @@ class ApiService {
     });
   }
 
+  async applyActionableChange(itineraryId, changeAction) {
+    return this.apiCall('/agent/apply-change', {
+      method: 'POST',
+      body: JSON.stringify({ itineraryId, changeAction })
+    });
+  }
+
   // Regenerate itinerary with AI
   async regenerateItinerary(itineraryId) {
     return this.apiCall(`/itinerary/${itineraryId}/regenerate`, {
       method: 'PUT'
     });
   }
+
+  // Weather API methods
+  async getCurrentWeather(city) {
+    return this.apiCall('/weather/current', {
+      method: 'GET',
+      params: { city }
+    });
+  }
+
+  async getWeatherForecast(city, days = 5) {
+    return this.apiCall('/weather/forecast', {
+      method: 'GET',
+      params: { city, days }
+    });
+  }
+
+  async getWeatherForDate(city, date) {
+    return this.apiCall('/weather/date', {
+      method: 'GET',
+      params: { city, date }
+    });
+  }
+
+  async getWeatherForItinerary(dailyItinerary) {
+    return this.apiCall('/weather/itinerary', {
+      method: 'POST',
+      body: JSON.stringify({ dailyItinerary })
+    });
+  }
 }
 
-// Export singleton instance
-const apiService = new ApiService();
-export default apiService;
+export default new ApiService();

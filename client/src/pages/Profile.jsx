@@ -21,11 +21,16 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from "../contexts/AuthContext"
+import apiService from "../services/api"
 
 const Profile = () => {
   const navigate = useNavigate()
   const { isAuthenticated, user, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [savedItineraries, setSavedItineraries] = useState([])
+  const [tripHistory, setTripHistory] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
 
   // Use real user data or fallback to dummy data
   const userData = user || {
@@ -39,91 +44,44 @@ const Profile = () => {
     navigate('/');
   };
 
-  // Dummy saved drafts data
-  const savedDrafts = [
-    {
-      id: 1,
-      title: "Summer Trip to Goa",
-      startLocation: "Mumbai, India",
-      destination: "Goa, India",
-      startDate: "2025-07-15",
-      days: 5,
-      travelers: 2,
-      budget: "moderate",
-      createdAt: "2025-01-10",
-      status: "draft"
-    },
-    {
-      id: 2,
-      title: "Weekend in Mumbai",
-      startLocation: "Pune, India",
-      destination: "Mumbai, India",
-      startDate: "2025-06-20",
-      days: 3,
-      travelers: 4,
-      budget: "high",
-      createdAt: "2025-01-08",
-      status: "draft"
-    },
-    {
-      id: 3,
-      title: "Kerala Backwaters Tour",
-      startLocation: "Bangalore, India",
-      destination: "Kerala, India",
-      startDate: "2025-08-10",
-      days: 7,
-      travelers: 2,
-      budget: "low",
-      createdAt: "2025-01-05",
-      status: "draft"
+  // Fetch user's itineraries on component mount
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserItineraries();
     }
-  ]
+  }, [isAuthenticated]);
 
-  // Dummy trip history data
-  const tripHistory = [
-    {
-      id: 4,
-      title: "Delhi Heritage Walk",
-      startLocation: "Mumbai, India",
-      destination: "Delhi, India",
-      startDate: "2024-12-15",
-      endDate: "2024-12-18",
-      days: 4,
-      travelers: 3,
-      budget: "moderate",
-      completedAt: "2024-12-18",
-      status: "completed",
-      rating: 4.5
-    },
-    {
-      id: 5,
-      title: "Rajasthan Royal Tour",
-      startLocation: "Delhi, India",
-      destination: "Rajasthan, India",
-      startDate: "2024-11-20",
-      endDate: "2024-11-27",
-      days: 8,
-      travelers: 2,
-      budget: "high",
-      completedAt: "2024-11-27",
-      status: "completed",
-      rating: 5.0
-    },
-    {
-      id: 6,
-      title: "Himachal Adventure",
-      startLocation: "Chandigarh, India",
-      destination: "Himachal Pradesh, India",
-      startDate: "2024-10-10",
-      endDate: "2024-10-15",
-      days: 6,
-      travelers: 5,
-      budget: "moderate",
-      completedAt: "2024-10-15",
-      status: "completed",
-      rating: 4.2
+  const fetchUserItineraries = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      // Fetch all user itineraries
+      const response = await apiService.getUserItineraries();
+      
+      if (response.success) {
+        const itineraries = response.data;
+        
+        // Separate saved drafts and completed trips
+        const saved = itineraries.filter(it => 
+          it.status === 'confirmed' || it.status === 'saved' || it.status === 'generated'
+        );
+        const completed = itineraries.filter(it => 
+          it.status === 'completed'
+        );
+        
+        setSavedItineraries(saved);
+        setTripHistory(completed);
+      } else {
+        setError('Failed to load your itineraries');
+      }
+    } catch (error) {
+      console.error('Error fetching itineraries:', error);
+      setError('Failed to load your travel data');
+    } finally {
+      setIsLoading(false);
     }
-  ]
+  }
 
   const getBudgetColor = (budget) => {
     const colors = {
@@ -137,11 +95,65 @@ const Profile = () => {
   const handleFinishDraft = (draftId) => {
     console.log(`Finishing draft ${draftId}`)
     // Navigate to results page or implement finish logic
+    navigate(`/results?itineraryId=${draftId}`)
   }
 
-  const handleDeleteDraft = (draftId) => {
-    console.log(`Deleting draft ${draftId}`)
-    // Implement delete logic
+  const handleDeleteDraft = async (draftId) => {
+    try {
+      console.log(`Deleting draft ${draftId}`)
+      const response = await apiService.deleteItinerary(draftId);
+      
+      if (response.success) {
+        // Remove from local state
+        setSavedItineraries(prev => prev.filter(it => it._id !== draftId));
+      } else {
+        alert('Failed to delete itinerary');
+      }
+    } catch (error) {
+      console.error('Error deleting itinerary:', error);
+      alert('Failed to delete itinerary');
+    }
+  }
+
+  const formatItineraryForDisplay = (itinerary) => ({
+    id: itinerary._id,
+    title: itinerary.title,
+    startLocation: itinerary.startLocation,
+    destination: itinerary.destinations?.[0]?.name || 'Multiple destinations',
+    destinations: itinerary.destinations,
+    startDate: itinerary.startDate,
+    endDate: itinerary.endDate,
+    days: itinerary.numberOfDays,
+    travelers: itinerary.travelers,
+    budget: itinerary.budget,
+    createdAt: itinerary.createdAt,
+    completedAt: itinerary.completedAt,
+    status: itinerary.status,
+    rating: itinerary.rating
+  });
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-green-50 to-green-100 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-[#2e7f43] mb-4">Please sign in to view your profile</h2>
+          <Button onClick={() => navigate('/login')} className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white">
+            Sign In
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-white via-green-50 to-green-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2e7f43] mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-[#2e7f43] mb-4">Loading your profile...</h2>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -343,73 +355,95 @@ const Profile = () => {
               <CardHeader>
                 <CardTitle className="text-2xl text-[#2e7f43] flex items-center gap-2">
                   <Clock className="w-6 h-6" />
-                  Saved Drafts ({savedDrafts.length})
+                  Saved Itineraries ({savedItineraries.length})
                 </CardTitle>
                 <CardDescription>
-                  Your incomplete trip plans waiting to be finalized
+                  Your saved trip plans ready for your adventures
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {savedDrafts.map((draft) => (
-                  <Card key={draft.id} className="border-l-4 border-l-[#2e7f43] hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="font-bold text-lg text-gray-800">{draft.title}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getBudgetColor(draft.budget)}`}>
-                          {draft.budget.charAt(0).toUpperCase() + draft.budget.slice(1)}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4 text-blue-500" />
-                          <span>{draft.startLocation}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4 text-green-500" />
-                          <span>{draft.destination}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          <span>{new Date(draft.startDate).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>{draft.days} days</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          <span>{draft.travelers} travelers</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">
-                          Created: {new Date(draft.createdAt).toLocaleDateString()}
-                        </span>
-                        <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
-                            className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white"
-                            onClick={() => handleFinishDraft(draft.id)}
-                          >
-                            <Play className="w-3 h-3 mr-1" />
-                            Finish
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="border-red-300 text-red-600 hover:bg-red-50"
-                            onClick={() => handleDeleteDraft(draft.id)}
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+                    {error}
+                  </div>
+                )}
+                
+                {savedItineraries.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-4">No saved itineraries yet</p>
+                    <Button 
+                      onClick={() => navigate('/plan')} 
+                      className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] text-white"
+                    >
+                      Plan Your First Trip
+                    </Button>
+                  </div>
+                ) : (
+                  savedItineraries.map((itinerary) => {
+                    const draft = formatItineraryForDisplay(itinerary);
+                    return (
+                      <Card key={draft.id} className="border-l-4 border-l-[#2e7f43] hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <h3 className="font-bold text-lg text-gray-800">{draft.title}</h3>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getBudgetColor(draft.budget)}`}>
+                              {draft.budget.charAt(0).toUpperCase() + draft.budget.slice(1)}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4 text-blue-500" />
+                              <span>{draft.startLocation}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4 text-green-500" />
+                              <span>{draft.destination}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              <span>{new Date(draft.startDate).toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>{draft.days} days</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4" />
+                              <span>{draft.travelers} travelers</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-500">
+                              Created: {new Date(draft.createdAt).toLocaleDateString()}
+                            </span>
+                            <div className="flex space-x-2">
+                              <Button 
+                                size="sm" 
+                                className="bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white"
+                                onClick={() => handleFinishDraft(draft.id)}
+                              >
+                                <Play className="w-3 h-3 mr-1" />
+                                View
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="border-red-300 text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteDraft(draft.id)}
+                              >
+                                <Trash2 className="w-3 h-3 mr-1" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
               </CardContent>
             </Card>
           </div>
@@ -427,61 +461,77 @@ const Profile = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {tripHistory.map((trip) => (
-                  <Card key={trip.id} className="border-l-4 border-l-green-500 hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="font-bold text-lg text-gray-800">{trip.title}</h3>
-                        <div className="flex items-center gap-1">
-                          <span className="text-yellow-500">★</span>
-                          <span className="text-sm font-medium">{trip.rating}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4 text-blue-500" />
-                          <span>{trip.startLocation}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4 text-green-500" />
-                          <span>{trip.destination}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          <span>{new Date(trip.startDate).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>{trip.days} days</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          <span>{trip.travelers} travelers</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">
-                          Completed: {new Date(trip.completedAt).toLocaleDateString()}
-                        </span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getBudgetColor(trip.budget)}`}>
-                          {trip.budget.charAt(0).toUpperCase() + trip.budget.slice(1)}
-                        </span>
-                      </div>
-                      
-                      <div className="mt-3">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white w-full"
-                        >
-                          View Details
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {tripHistory.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No completed trips yet</p>
+                    <p className="text-sm text-gray-500">Complete your saved trips to see them here</p>
+                  </div>
+                ) : (
+                  tripHistory.map((itinerary) => {
+                    const trip = formatItineraryForDisplay(itinerary);
+                    return (
+                      <Card key={trip.id} className="border-l-4 border-l-green-500 hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <h3 className="font-bold text-lg text-gray-800">{trip.title}</h3>
+                            {trip.rating && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-yellow-500">★</span>
+                                <span className="text-sm font-medium">{trip.rating}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4 text-blue-500" />
+                              <span>{trip.startLocation}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4 text-green-500" />
+                              <span>{trip.destination}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              <span>{new Date(trip.startDate).toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>{trip.days} days</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4" />
+                              <span>{trip.travelers} travelers</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            {trip.completedAt && (
+                              <span className="text-xs text-gray-500">
+                                Completed: {new Date(trip.completedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getBudgetColor(trip.budget)}`}>
+                              {trip.budget.charAt(0).toUpperCase() + trip.budget.slice(1)}
+                            </span>
+                          </div>
+                          
+                          <div className="mt-3">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="border-[#2e7f43] text-[#2e7f43] hover:bg-[#2e7f43] hover:text-white w-full"
+                              onClick={() => handleFinishDraft(trip.id)}
+                            >
+                              View Details
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
               </CardContent>
             </Card>
           </div>

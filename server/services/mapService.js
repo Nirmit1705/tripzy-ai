@@ -58,8 +58,306 @@ class MapService {
     }
   }
 
-  // Search hotels using Amadeus API with basic pricing
+  // Search hotels using Amadeus API with REAL pricing
   async searchHotels(cityCode, checkInDate, checkOutDate, adults = 1, radius = 5, radiusUnit = 'KM', targetCurrency = 'USD') {
+    // Check if credentials are available
+    const mockMode = !this.amadeusApiKey || !this.amadeusApiSecret;
+    
+    if (mockMode) {
+      console.log('Running in mock mode for hotel search (no credentials)...');
+      return this.getMockHotels(cityCode, checkInDate, checkOutDate, adults, targetCurrency);
+    }
+
+    try {
+      const token = await this.getAmadeusToken();
+      
+      // Step 1: Get hotel list by city
+      const hotelsResponse = await axios.get(`${this.amadeusBaseUrl}/reference-data/locations/hotels/by-city`, {
+        params: {
+          cityCode,
+          radius,
+          radiusUnit,
+          hotelSource: 'ALL'
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!hotelsResponse.data.data || hotelsResponse.data.data.length === 0) {
+        console.warn(`No hotels found for ${cityCode}, using mock data`);
+        return this.getMockHotels(cityCode, checkInDate, checkOutDate, adults, targetCurrency);
+      }
+
+      // Step 2: Get real pricing for each hotel
+      const hotelsWithRealPricing = await Promise.all(
+        hotelsResponse.data.data.slice(0, 10).map(async (hotel) => { // Limit to 10 hotels for performance
+          try {
+            // Get real hotel offers with pricing
+            const offersResponse = await axios.get(`${this.amadeusBaseUrl}/shopping/hotel-offers`, {
+              params: {
+                hotelIds: hotel.hotelId,
+                checkInDate,
+                checkOutDate,
+                adults,
+                currency: 'USD' // Always get USD first, then convert
+              },
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+
+            let realPrice = null;
+            if (offersResponse.data.data && offersResponse.data.data.length > 0) {
+              const offers = offersResponse.data.data[0].offers;
+              if (offers && offers.length > 0) {
+                // Get the cheapest offer
+                const cheapestOffer = offers.reduce((min, offer) => 
+                  parseFloat(offer.price.total) < parseFloat(min.price.total) ? offer : min
+                );
+                realPrice = parseFloat(cheapestOffer.price.total);
+              }
+            }
+
+            // If no real price found, use estimation
+            if (!realPrice) {
+              realPrice = this.estimateHotelPrice(hotel);
+            }
+
+            // Convert currency if needed
+            let convertedPrice = realPrice;
+            if (targetCurrency !== 'USD') {
+              try {
+                convertedPrice = await currencyService.convertCurrency(realPrice, 'USD', targetCurrency);
+              } catch (error) {
+                console.warn(`Currency conversion failed for hotel ${hotel.hotelId}:`, error.message);
+              }
+            }
+
+            return {
+              hotelId: hotel.hotelId,
+              name: hotel.name,
+              lat: hotel.geoCode?.latitude,
+              lon: hotel.geoCode?.longitude,
+              address: hotel.address,
+              distance: hotel.distance?.value,
+              distanceUnit: hotel.distance?.unit,
+              realPrice: {
+                amount: Math.round(convertedPrice * 100) / 100, // Round to 2 decimal places
+                currency: targetCurrency,
+                originalAmount: realPrice,
+                originalCurrency: 'USD',
+                perNight: true,
+                isRealPrice: !!realPrice // Flag to indicate if this is real or estimated
+              },
+              estimatedPrice: { // Keep for backward compatibility
+                amount: Math.round(convertedPrice * 100) / 100,
+                currency: targetCurrency,
+                originalAmount: realPrice,
+                originalCurrency: 'USD',
+                perNight: true
+              }
+            };
+          } catch (error) {
+            console.warn(`Failed to get real pricing for hotel ${hotel.hotelId}:`, error.message);
+            
+            // Fallback to estimation for this hotel
+            const estimatedPrice = this.estimateHotelPrice(hotel);
+            let convertedPrice = estimatedPrice;
+            
+            if (targetCurrency !== 'USD') {
+              try {
+                convertedPrice = await currencyService.convertCurrency(estimatedPrice, 'USD', targetCurrency);
+              } catch (error) {
+                console.warn(`Currency conversion failed for hotel ${hotel.hotelId}:`, error.message);
+              }
+            }
+
+            return {
+              hotelId: hotel.hotelId,
+              name: hotel.name,
+              lat: hotel.geoCode?.latitude,
+              lon: hotel.geoCode?.longitude,
+              address: hotel.address,
+              distance: hotel.distance?.value,
+              distanceUnit: hotel.distance?.unit,
+              realPrice: {
+                amount: Math.round(convertedPrice * 100) / 100,
+                currency: targetCurrency,
+                originalAmount: estimatedPrice,
+                originalCurrency: 'USD',
+                perNight: true,
+                isRealPrice: false // This is estimated
+              },
+              estimatedPrice: {
+                amount: Math.round(convertedPrice * 100) / 100,
+                currency: targetCurrency,
+                originalAmount: estimatedPrice,
+                originalCurrency: 'USD',
+                perNight: true
+              }
+            };
+          }
+        })
+      );
+
+      console.log(`Retrieved real pricing for ${hotelsWithRealPricing.length} hotels in ${cityCode}`);
+      return hotelsWithRealPricing;
+
+    } catch (error) {
+      console.warn('Amadeus API failed completely, falling back to mock mode:', error.message);
+      return this.getMockHotels(cityCode, checkInDate, checkOutDate, adults, targetCurrency);
+    }
+  }
+
+  // Generate mock hotels with pricing for testing
+  async getMockHotels(cityCode, checkInDate, checkOutDate, adults, targetCurrency) {
+    console.log(`Generating mock hotels for ${cityCode} in ${targetCurrency}`);
+    
+    // Use geocoding to get real city coordinates instead of static data
+    const cityCoordinates = await this.geocodeCityForHotels(cityCode);
+    
+    const mockHotels = [
+      {
+        hotelId: `MOCK_${cityCode}_001`,
+        name: `${cityCode} Grand Hotel`,
+        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
+        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
+        address: {
+          lines: [`Grand Hotel Street, ${cityCode}`],
+          postalCode: '12345',
+          cityName: cityCode,
+          countryCode: cityCoordinates.country
+        },
+        distance: { value: 2.5, unit: 'KM' },
+        distanceUnit: 'KM'
+      },
+      {
+        hotelId: `MOCK_${cityCode}_002`,
+        name: `${cityCode} Luxury Resort`,
+        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
+        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
+        address: {
+          lines: [`Resort Boulevard, ${cityCode}`],
+          postalCode: '12346',
+          cityName: cityCode,
+          countryCode: cityCoordinates.country
+        },
+        distance: { value: 5.2, unit: 'KM' },
+        distanceUnit: 'KM'
+      },
+      {
+        hotelId: `MOCK_${cityCode}_003`,
+        name: `${cityCode} Budget Inn`,
+        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
+        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
+        address: {
+          lines: [`Economy Street, ${cityCode}`],
+          postalCode: '12347',
+          cityName: cityCode,
+          countryCode: cityCoordinates.country
+        },
+        distance: { value: 1.8, unit: 'KM' },
+        distanceUnit: 'KM'
+      },
+      {
+        hotelId: `MOCK_${cityCode}_004`,
+        name: `${cityCode} Business Hotel`,
+        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
+        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
+        address: {
+          lines: [`Business District, ${cityCode}`],
+          postalCode: '12348',
+          cityName: cityCode,
+          countryCode: cityCoordinates.country
+        },
+        distance: { value: 3.1, unit: 'KM' },
+        distanceUnit: 'KM'
+      },
+      {
+        hotelId: `MOCK_${cityCode}_005`,
+        name: `${cityCode} Boutique Hotel`,
+        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
+        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
+        address: {
+          lines: [`Boutique Avenue, ${cityCode}`],
+          postalCode: '12349',
+          cityName: cityCode,
+          countryCode: cityCoordinates.country
+        },
+        distance: { value: 4.7, unit: 'KM' },
+        distanceUnit: 'KM'
+      }
+    ];
+
+    // Add pricing estimates and currency conversion
+    const hotelsWithPricing = await Promise.all(mockHotels.map(async (hotel) => {
+      const basePriceUSD = this.estimateHotelPrice(hotel);
+      
+      let convertedPrice = basePriceUSD;
+      if (targetCurrency !== 'USD') {
+        try {
+          convertedPrice = await currencyService.convertCurrency(basePriceUSD, 'USD', targetCurrency);
+        } catch (error) {
+          console.warn(`Currency conversion failed for hotel ${hotel.hotelId}:`, error.message);
+        }
+      }
+
+      return {
+        hotelId: hotel.hotelId,
+        name: hotel.name,
+        lat: hotel.lat,
+        lon: hotel.lon,
+        address: hotel.address,
+        distance: hotel.distance,
+        distanceUnit: hotel.distanceUnit,
+        estimatedPrice: {
+          amount: convertedPrice,
+          currency: targetCurrency,
+          originalAmount: basePriceUSD,
+          originalCurrency: 'USD',
+          perNight: true
+        }
+      };
+    }));
+
+    return hotelsWithPricing;
+  }
+
+  // Geocode city for hotel search
+  async geocodeCityForHotels(cityName) {
+    try {
+      const response = await axios.get(`${this.nominatimUrl}/search`, {
+        params: {
+          q: cityName,
+          format: 'json',
+          limit: 1,
+          addressdetails: 1
+        }
+      });
+
+      if (response.data && response.data.length > 0) {
+        const result = response.data[0];
+        return {
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon),
+          country: result.address?.country_code?.toUpperCase() || 'US'
+        };
+      }
+    } catch (error) {
+      console.warn(`Geocoding failed for ${cityName}:`, error.message);
+    }
+
+    // Fallback to default coordinates (New York)
+    return {
+      lat: 40.7128,
+      lon: -74.0060,
+      country: 'US'
+    };
+  }
+
+  // Search for hotels using Amadeus API (detailed pricing)
+  async searchHotelsDetailed(cityCode, checkInDate, checkOutDate, adults = 1, radius = 5, radiusUnit = 'KM', targetCurrency = 'USD') {
     // Check if credentials are available
     const mockMode = !this.amadeusApiKey || !this.amadeusApiSecret;
     
@@ -83,9 +381,9 @@ class MapService {
         }
       });
 
-      // Add basic pricing estimates and convert currency if needed
+      // Add detailed pricing information
       const hotelsWithPricing = await Promise.all(response.data.data.map(async (hotel) => {
-        // Generate basic pricing estimate based on hotel data
+        // Generate detailed pricing based on hotel data
         const basePriceUSD = this.estimateHotelPrice(hotel);
         
         let convertedPrice = basePriceUSD;
@@ -111,7 +409,10 @@ class MapService {
             originalAmount: basePriceUSD,
             originalCurrency: 'USD',
             perNight: true
-          }
+          },
+          amenities: hotel.amenities,
+          rating: hotel.rating,
+          description: hotel.description
         };
       }));
 
@@ -123,213 +424,23 @@ class MapService {
     }
   }
 
-  // Generate mock hotels with pricing for testing
-  async getMockHotels(cityCode, checkInDate, checkOutDate, adults, targetCurrency) {
-    console.log(`Generating mock hotels for ${cityCode} in ${targetCurrency}`);
-    
-    const cityCoordinates = this.getCityCoordinates(cityCode);
-    
-    const mockHotels = [
-      {
-        hotelId: `MOCK_${cityCode}_001`,
-        name: `Grand Hotel ${cityCode}`,
-        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
-        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
-        address: {
-          lines: [`123 Main Street, ${cityCode}`],
-          postalCode: '12345',
-          cityName: cityCode,
-          countryCode: cityCoordinates.country
-        },
-        distance: { value: 2.5, unit: 'KM' },
-        distanceUnit: 'KM'
-      },
-      {
-        hotelId: `MOCK_${cityCode}_002`,
-        name: `Luxury Resort ${cityCode}`,
-        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
-        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
-        address: {
-          lines: [`456 Resort Boulevard, ${cityCode}`],
-          postalCode: '12346',
-          cityName: cityCode,
-          countryCode: cityCoordinates.country
-        },
-        distance: { value: 5.2, unit: 'KM' },
-        distanceUnit: 'KM'
-      },
-      {
-        hotelId: `MOCK_${cityCode}_003`,
-        name: `Budget Inn ${cityCode}`,
-        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
-        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
-        address: {
-          lines: [`789 Economy Street, ${cityCode}`],
-          postalCode: '12347',
-          cityName: cityCode,
-          countryCode: cityCoordinates.country
-        },
-        distance: { value: 1.8, unit: 'KM' },
-        distanceUnit: 'KM'
-      },
-      {
-        hotelId: `MOCK_${cityCode}_004`,
-        name: `Business Hotel ${cityCode}`,
-        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
-        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
-        address: {
-          lines: [`321 Business District, ${cityCode}`],
-          postalCode: '12348',
-          cityName: cityCode,
-          countryCode: cityCoordinates.country
-        },
-        distance: { value: 3.1, unit: 'KM' },
-        distanceUnit: 'KM'
-      },
-      {
-        hotelId: `MOCK_${cityCode}_005`,
-        name: `Boutique Hotel ${cityCode}`,
-        lat: cityCoordinates.lat + (Math.random() - 0.5) * 0.02,
-        lon: cityCoordinates.lon + (Math.random() - 0.5) * 0.02,
-        address: {
-          lines: [`654 Boutique Avenue, ${cityCode}`],
-          postalCode: '12349',
-          cityName: cityCode,
-          countryCode: cityCoordinates.country
-        },
-        distance: { value: 4.7, unit: 'KM' },
-        distanceUnit: 'KM'
-      }
-    ];
-
-    // Add pricing estimates and currency conversion
-    const hotelsWithPricing = await Promise.all(mockHotels.map(async (hotel) => {
-      const basePriceUSD = this.estimateHotelPrice(hotel);
-      
-      let convertedPrice = basePriceUSD;
-      if (targetCurrency !== 'USD') {
-        try {
-          convertedPrice = await currencyService.convertCurrency(basePriceUSD, 'USD', targetCurrency);
-        } catch (error) {
-          console.warn(`Currency conversion failed for hotel ${hotel.hotelId}:`, error.message);
-        }
-      }
-
-      return {
-        ...hotel,
-        estimatedPrice: {
-          amount: Math.round(convertedPrice * 100) / 100,
-          currency: targetCurrency,
-          originalAmount: basePriceUSD,
-          originalCurrency: 'USD',
-          perNight: true
-        },
-        mockData: true
-      };
-    }));
-
-    return hotelsWithPricing;
-  }
-
-  // Get approximate coordinates for common city codes
-  getCityCoordinates(cityCode) {
-    const cityMap = {
-      'PAR': { lat: 48.8566, lon: 2.3522, country: 'FR' },
-      'LON': { lat: 51.5074, lon: -0.1278, country: 'GB' },
-      'NYC': { lat: 40.7128, lon: -74.0060, country: 'US' },
-      'TYO': { lat: 35.6762, lon: 139.6503, country: 'JP' },
-      'BER': { lat: 52.5200, lon: 13.4050, country: 'DE' },
-      'ROM': { lat: 41.9028, lon: 12.4964, country: 'IT' },
-      'MAD': { lat: 40.4168, lon: -3.7038, country: 'ES' },
-      'BCN': { lat: 41.3851, lon: 2.1734, country: 'ES' },
-      'AMS': { lat: 52.3676, lon: 4.9041, country: 'NL' },
-      'ZUR': { lat: 47.3769, lon: 8.5417, country: 'CH' }
-    };
-
-    return cityMap[cityCode] || { lat: 48.8566, lon: 2.3522, country: 'FR' }; // Default to Paris
-  }
-
-  // Enhanced method for comprehensive city coordinates
-  getAllCityCoordinates() {
-    return {
-      // Popular Indian cities
-      'Delhi': { lat: 28.6139, lon: 77.2090, country: 'IN', code: 'DEL' },
-      'Mumbai': { lat: 19.0760, lon: 72.8777, country: 'IN', code: 'BOM' },
-      'Bangalore': { lat: 12.9716, lon: 77.5946, country: 'IN', code: 'BLR' },
-      'Chennai': { lat: 13.0827, lon: 80.2707, country: 'IN', code: 'MAA' },
-      'Kolkata': { lat: 22.5726, lon: 88.3639, country: 'IN', code: 'CCU' },
-      'Pune': { lat: 18.5204, lon: 73.8567, country: 'IN', code: 'PNQ' },
-      'Hyderabad': { lat: 17.3850, lon: 78.4867, country: 'IN', code: 'HYD' },
-      'Ahmedabad': { lat: 23.0225, lon: 72.5714, country: 'IN', code: 'AMD' },
-      'Jaipur': { lat: 26.9124, lon: 75.7873, country: 'IN', code: 'JAI' },
-      'Goa': { lat: 15.2993, lon: 74.1240, country: 'IN', code: 'GOI' },
-      
-      // International cities
-      'Paris': { lat: 48.8566, lon: 2.3522, country: 'FR', code: 'PAR' },
-      'London': { lat: 51.5074, lon: -0.1278, country: 'GB', code: 'LON' },
-      'New York': { lat: 40.7128, lon: -74.0060, country: 'US', code: 'NYC' },
-      'Tokyo': { lat: 35.6762, lon: 139.6503, country: 'JP', code: 'TYO' },
-      'Berlin': { lat: 52.5200, lon: 13.4050, country: 'DE', code: 'BER' },
-      'Rome': { lat: 41.9028, lon: 12.4964, country: 'IT', code: 'ROM' },
-      'Madrid': { lat: 40.4168, lon: -3.7038, country: 'ES', code: 'MAD' },
-      'Barcelona': { lat: 41.3851, lon: 2.1734, country: 'ES', code: 'BCN' },
-      'Amsterdam': { lat: 52.3676, lon: 4.9041, country: 'NL', code: 'AMS' },
-      'Zurich': { lat: 47.3769, lon: 8.5417, country: 'CH', code: 'ZUR' },
-      'Dubai': { lat: 25.2048, lon: 55.2708, country: 'AE', code: 'DXB' },
-      'Singapore': { lat: 1.3521, lon: 103.8198, country: 'SG', code: 'SIN' },
-      'Bangkok': { lat: 13.7563, lon: 100.5018, country: 'TH', code: 'BKK' },
-      'Sydney': { lat: -33.8688, lon: 151.2093, country: 'AU', code: 'SYD' },
-      'Los Angeles': { lat: 34.0522, lon: -118.2437, country: 'US', code: 'LAX' }
-    };
-  }
-
-  // Find city coordinates by name (fuzzy search)
-  findCityCoordinates(cityName) {
-    const allCities = this.getAllCityCoordinates();
-    
-    // Exact match first
-    if (allCities[cityName]) {
-      return allCities[cityName];
-    }
-    
-    // Case-insensitive exact match
-    const exactMatch = Object.keys(allCities).find(
-      city => city.toLowerCase() === cityName.toLowerCase()
-    );
-    if (exactMatch) {
-      return allCities[exactMatch];
-    }
-    
-    // Partial match
-    const partialMatch = Object.keys(allCities).find(
-      city => city.toLowerCase().includes(cityName.toLowerCase()) ||
-              cityName.toLowerCase().includes(city.toLowerCase())
-    );
-    if (partialMatch) {
-      return allCities[partialMatch];
-    }
-    
-    // Default to Delhi if no match found
-    return allCities['Delhi'];
-  }
-
-  // Estimate hotel price based on name and location
+  // Estimate hotel pricing based on hotel data
   estimateHotelPrice(hotel) {
-    const hotelName = hotel.name.toLowerCase();
-    let basePrice = 120; // Default price
-
-    // Price estimation based on hotel name keywords
-    if (hotelName.includes('luxury') || hotelName.includes('grand') || hotelName.includes('resort')) {
-      basePrice = 300 + Math.floor(Math.random() * 200);
-    } else if (hotelName.includes('budget') || hotelName.includes('inn') || hotelName.includes('hostel')) {
-      basePrice = 60 + Math.floor(Math.random() * 60);
-    } else if (hotelName.includes('boutique') || hotelName.includes('premium')) {
-      basePrice = 200 + Math.floor(Math.random() * 150);
-    } else {
-      basePrice = 100 + Math.floor(Math.random() * 100);
+    // Dynamic pricing based on hotel name and location
+    let basePrice = 80; // Base price in USD
+    
+    if (hotel.name.toLowerCase().includes('luxury') || hotel.name.toLowerCase().includes('grand')) {
+      basePrice = 150;
+    } else if (hotel.name.toLowerCase().includes('budget') || hotel.name.toLowerCase().includes('economy')) {
+      basePrice = 40;
+    } else if (hotel.name.toLowerCase().includes('boutique') || hotel.name.toLowerCase().includes('business')) {
+      basePrice = 100;
     }
-
-    return Math.round(basePrice);
+    
+    // Add some randomness for variety
+    basePrice += (Math.random() - 0.5) * 40;
+    
+    return Math.max(25, Math.round(basePrice));
   }
 
   // Remove the complex getHotelOffers method and replace with simple version
@@ -412,21 +523,29 @@ class MapService {
   // Search for places (restaurants, hotels, attractions)
   async searchPlaces(query, lat, lon, radius = 5000) {
     try {
+      let searchParams = {
+        q: query,
+        format: 'json',
+        limit: 10,
+        addressdetails: 1
+      };
+
+      // If coordinates provided, search within radius
+      if (lat && lon) {
+        const bbox = this.getBoundingBox(lat, lon, radius);
+        searchParams.bounded = 1;
+        searchParams.viewbox = `${bbox.minLon},${bbox.maxLat},${bbox.maxLon},${bbox.minLat}`;
+      }
+
       const response = await axios.get(`${this.nominatimUrl}/search`, {
-        params: {
-          q: query,
-          format: 'json',
-          limit: 20,
-          addressdetails: 1,
-          bounded: 1,
-          viewbox: this.getBoundingBox(lat, lon, radius)
-        },
+        params: searchParams,
         headers: {
           'User-Agent': 'TripzyAI/1.0'
         }
       });
 
       return response.data.map(place => ({
+        id: place.place_id,
         name: place.display_name,
         lat: parseFloat(place.lat),
         lon: parseFloat(place.lon),
@@ -435,7 +554,7 @@ class MapService {
         address: place.address
       }));
     } catch (error) {
-      throw new Error(`Place search failed: ${error.message}`);
+      throw new Error(`Places search failed: ${error.message}`);
     }
   }
 
@@ -454,176 +573,179 @@ class MapService {
 
   // Helper method to convert degrees to radians
   toRadians(degrees) {
-    return degrees * (Math.PI / 180);
+    return degrees * (Math.PI/180);
   }
 
   // Helper method to create bounding box for search
   getBoundingBox(lat, lon, radiusInMeters) {
-    const latDelta = radiusInMeters / 111320; // meters to degrees latitude
-    const lonDelta = radiusInMeters / (111320 * Math.cos(this.toRadians(lat))); // meters to degrees longitude
+    const latRadian = lat * Math.PI / 180;
+    const degreeRadius = radiusInMeters / 111000; // Approximate meters per degree
     
-    const minLat = lat - latDelta;
-    const maxLat = lat + latDelta;
-    const minLon = lon - lonDelta;
-    const maxLon = lon + lonDelta;
+    const minLat = lat - degreeRadius;
+    const maxLat = lat + degreeRadius;
+    const minLon = lon - degreeRadius / Math.cos(latRadian);
+    const maxLon = lon + degreeRadius / Math.cos(latRadian);
     
-    return `${minLon},${minLat},${maxLon},${maxLat}`;
+    return { minLat, maxLat, minLon, maxLon };
   }
 
-  // Get tile server URL for frontend map rendering
+  // Get tile server URL
   getTileServerUrl() {
     return this.tileServer;
   }
 
-  // Plan optimal route for multiple destinations
-  async planMultiDestinationRoute(initialLocation, destinations) {
-    try {
-      const allLocations = [initialLocation, ...destinations];
-      const routeMatrix = [];
-      
-      // Calculate distances between all locations
-      for (let i = 0; i < allLocations.length; i++) {
-        routeMatrix[i] = [];
-        for (let j = 0; j < allLocations.length; j++) {
-          if (i === j) {
-            routeMatrix[i][j] = 0;
-          } else {
-            const distance = this.calculateDistance(
-              allLocations[i].coordinates.lat,
-              allLocations[i].coordinates.lon,
-              allLocations[j].coordinates.lat,
-              allLocations[j].coordinates.lon
-            );
-            routeMatrix[i][j] = distance;
-          }
-        }
+  // Geocode multiple locations
+  async geocodeMultipleLocations(locations) {
+    const results = [];
+    
+    for (const location of locations) {
+      try {
+        const locationName = typeof location === 'string' ? location : location.name;
+        const geocoded = await this.geocode(locationName);
+        results.push({
+          name: locationName,
+          coordinates: {
+            lat: geocoded.lat,
+            lon: geocoded.lon
+          },
+          display_name: geocoded.display_name,
+          address: geocoded.address
+        });
+      } catch (error) {
+        console.warn(`Failed to geocode ${location}:`, error.message);
+        // Use fallback coordinates
+        results.push({
+          name: typeof location === 'string' ? location : location.name,
+          coordinates: {
+            lat: 28.6139,
+            lon: 77.2090
+          },
+          display_name: `${typeof location === 'string' ? location : location.name} (approximate)`,
+          address: {}
+        });
       }
-
-      // Simple nearest neighbor algorithm for route optimization
-      const optimizedRoute = this.optimizeRoute(routeMatrix, 0); // Start from initial location
-      
-      return {
-        originalLocations: allLocations,
-        optimizedOrder: optimizedRoute,
-        optimizedLocations: optimizedRoute.map(index => allLocations[index]),
-        totalDistance: this.calculateTotalDistance(routeMatrix, optimizedRoute)
-      };
-    } catch (error) {
-      throw new Error(`Multi-destination route planning failed: ${error.message}`);
     }
+    
+    return results;
   }
 
-  // Simple route optimization using nearest neighbor
-  optimizeRoute(distanceMatrix, startIndex = 0) {
-    const numLocations = distanceMatrix.length;
-    const visited = new Array(numLocations).fill(false);
-    const route = [startIndex];
-    visited[startIndex] = true;
-    
-    let currentLocation = startIndex;
-    
-    for (let i = 1; i < numLocations; i++) {
-      let nearestDistance = Infinity;
-      let nearestLocation = -1;
+  // Plan route for multiple destinations
+  async planMultiDestinationRoute(initialLocation, destinations) {
+    // Simple route planning - returns destinations with distances
+    const route = {
+      startLocation: initialLocation,
+      destinations: [],
+      totalDistance: 0,
+      estimatedTime: 0
+    };
+
+    let currentLat = initialLocation.coordinates.lat;
+    let currentLon = initialLocation.coordinates.lon;
+
+    for (const destination of destinations) {
+      const distance = this.calculateDistance(
+        currentLat, currentLon,
+        destination.coordinates.lat, destination.coordinates.lon
+      );
       
-      for (let j = 0; j < numLocations; j++) {
-        if (!visited[j] && distanceMatrix[currentLocation][j] < nearestDistance) {
-          nearestDistance = distanceMatrix[currentLocation][j];
-          nearestLocation = j;
-        }
-      }
+      route.destinations.push({
+        ...destination,
+        distanceFromPrevious: distance,
+        estimatedTravelTime: Math.round(distance * 1.5) // Rough estimate: 1.5 hours per 100km
+      });
       
-      if (nearestLocation !== -1) {
-        route.push(nearestLocation);
-        visited[nearestLocation] = true;
-        currentLocation = nearestLocation;
-      }
+      route.totalDistance += distance;
+      currentLat = destination.coordinates.lat;
+      currentLon = destination.coordinates.lon;
     }
-    
+
+    route.estimatedTime = Math.round(route.totalDistance * 1.5);
     return route;
   }
 
-  // Calculate total distance for a route
-  calculateTotalDistance(distanceMatrix, route) {
-    let totalDistance = 0;
-    for (let i = 0; i < route.length - 1; i++) {
-      totalDistance += distanceMatrix[route[i]][route[i + 1]];
-    }
-    return Math.round(totalDistance * 100) / 100;
-  }
-
   // Get hotels for multiple destinations
-  async getHotelsForDestinations(destinations, checkInDate, checkOutDate, adults = 1, targetCurrency = 'USD') {
-    try {
-      const hotelResults = [];
-      
-      for (const destination of destinations) {
-        if (destination.cityCode) {
-          const hotels = await this.searchHotels(
-            destination.cityCode,
-            checkInDate,
-            checkOutDate,
-            adults,
-            5,
-            'KM',
-            targetCurrency
-          );
-          
-          hotelResults.push({
-            destination: destination.name,
-            cityCode: destination.cityCode,
-            hotels: hotels.slice(0, 10), // Limit to top 10 hotels per destination
-            currency: targetCurrency
-          });
-        }
+  async getHotelsForDestinations(destinations, checkInDate, checkOutDate, adults = 1, currency = 'USD') {
+    const results = [];
+    
+    for (const destination of destinations) {
+      try {
+        const cityCode = destination.name || destination;
+        const hotels = await this.searchHotels(
+          cityCode, checkInDate, checkOutDate, adults, 5, 'KM', currency
+        );
+        
+        results.push({
+          destination: cityCode,
+          hotels: hotels,
+          count: hotels.length
+        });
+      } catch (error) {
+        console.warn(`Failed to get hotels for ${destination}:`, error.message);
+        results.push({
+          destination: destination.name || destination,
+          hotels: [],
+          count: 0,
+          error: error.message
+        });
       }
-      
-      return hotelResults;
-    } catch (error) {
-      throw new Error(`Multi-destination hotel search failed: ${error.message}`);
     }
+    
+    return results;
   }
 
-  // Geocode multiple locations
-  async geocodeMultipleLocations(locations) {
-    try {
-      const geocodedLocations = [];
-      
-      for (const location of locations) {
-        if (typeof location === 'string') {
-          const geocoded = await this.geocode(location);
-          geocodedLocations.push({
-            name: location,
-            address: geocoded.display_name,
-            coordinates: {
-              lat: geocoded.lat,
-              lon: geocoded.lon
-            },
-            fullData: geocoded
-          });
-        } else if (location.name && !location.coordinates) {
-          const geocoded = await this.geocode(location.name);
-          geocodedLocations.push({
-            ...location,
-            address: geocoded.display_name,
-            coordinates: {
-              lat: geocoded.lat,
-              lon: geocoded.lon
-            },
-            fullData: geocoded
-          });
-        } else {
-          geocodedLocations.push(location);
-        }
-        
-        // Add delay to respect rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      return geocodedLocations;
-    } catch (error) {
-      throw new Error(`Multiple location geocoding failed: ${error.message}`);
-    }
+  // Get all city coordinates
+  getAllCityCoordinates() {
+    return {
+      'Delhi': { lat: 28.6139, lon: 77.2090 },
+      'Mumbai': { lat: 19.0760, lon: 72.8777 },
+      'Bangalore': { lat: 12.9716, lon: 77.5946 },
+      'Chennai': { lat: 13.0827, lon: 80.2707 },
+      'Kolkata': { lat: 22.5726, lon: 88.3639 },
+      'Pune': { lat: 18.5204, lon: 73.8567 },
+      'Hyderabad': { lat: 17.3850, lon: 78.4867 },
+      'Ahmedabad': { lat: 23.0225, lon: 72.5714 },
+      'Jaipur': { lat: 26.9124, lon: 75.7873 },
+      'Goa': { lat: 15.2993, lon: 74.1240 },
+      'Kochi': { lat: 9.9312, lon: 76.2673 },
+      'Thiruvananthapuram': { lat: 8.5241, lon: 76.9366 },
+      'Mysore': { lat: 12.2958, lon: 76.6394 },
+      'Udaipur': { lat: 24.5854, lon: 73.7125 },
+      'Jodhpur': { lat: 26.2389, lon: 73.0243 },
+      'Agra': { lat: 27.1767, lon: 78.0081 },
+      'Varanasi': { lat: 25.3176, lon: 82.9739 },
+      'Rishikesh': { lat: 30.0869, lon: 78.2676 },
+      'Haridwar': { lat: 29.9457, lon: 78.1642 },
+      'Manali': { lat: 32.2432, lon: 77.1892 },
+      'Shimla': { lat: 31.1048, lon: 77.1734 },
+      'Darjeeling': { lat: 27.0410, lon: 88.2663 },
+      'Gangtok': { lat: 27.3389, lon: 88.6065 },
+      'Paris': { lat: 48.8566, lon: 2.3522 },
+      'London': { lat: 51.5074, lon: -0.1278 },
+      'New York': { lat: 40.7128, lon: -74.0060 },
+      'Tokyo': { lat: 35.6762, lon: 139.6503 },
+      'Berlin': { lat: 52.5200, lon: 13.4050 },
+      'Rome': { lat: 41.9028, lon: 12.4964 },
+      'Barcelona': { lat: 41.3851, lon: 2.1734 },
+      'Amsterdam': { lat: 52.3676, lon: 4.9041 },
+      'Prague': { lat: 50.0755, lon: 14.4378 },
+      'Vienna': { lat: 48.2082, lon: 16.3738 },
+      'Dubai': { lat: 25.2048, lon: 55.2708 },
+      'Singapore': { lat: 1.3521, lon: 103.8198 },
+      'Bangkok': { lat: 13.7563, lon: 100.5018 },
+      'Hong Kong': { lat: 22.3193, lon: 114.1694 },
+      'Seoul': { lat: 37.5665, lon: 126.9780 }
+    };
+  }
+
+  // Find city coordinates
+  findCityCoordinates(cityName) {
+    const allCities = this.getAllCityCoordinates();
+    const cityKey = Object.keys(allCities).find(city => 
+      city.toLowerCase().includes(cityName.toLowerCase()) ||
+      cityName.toLowerCase().includes(city.toLowerCase())
+    );
+    
+    return cityKey ? allCities[cityKey] : allCities['Delhi']; // Default to Delhi
   }
 }
 

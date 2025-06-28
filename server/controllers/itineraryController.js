@@ -109,7 +109,8 @@ const generateItinerary = asyncHandler(async (req, res) => {
         meta: {
           aiGenerated: true,
           model: generationResult.aiModel,
-          totalCost: generationResult.totalCost
+          totalCost: generationResult.totalCost,
+          dynamicContent: true
         }
       });
     } else {
@@ -119,14 +120,16 @@ const generateItinerary = asyncHandler(async (req, res) => {
   } catch (generationError) {
     console.error('LLM generation failed:', generationError);
     
-    // Still return the basic itinerary even if AI generation fails
-    res.status(201).json({
-      success: true,
-      message: 'Itinerary created successfully (AI generation partially failed)',
+    // Return error instead of fallback - force user to retry
+    res.status(500).json({
+      success: false,
+      message: 'AI itinerary generation failed. Please try again.',
+      error: generationError.message,
       data: itinerary,
       meta: {
         aiGenerated: false,
-        warning: 'AI content generation failed, please regenerate later'
+        error: 'LLM_GENERATION_FAILED',
+        retryable: true
       }
     });
   }
@@ -318,6 +321,42 @@ const regenerateItinerary = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Save itinerary (change status from draft to saved)
+// @route   PUT /api/itinerary/:id/save
+// @access  Private
+const saveItinerary = asyncHandler(async (req, res) => {
+  const itinerary = await Itinerary.findById(req.params.id);
+
+  if (!itinerary) {
+    res.status(404);
+    throw new Error('Itinerary not found');
+  }
+
+  // Check if user owns this itinerary
+  if (itinerary.user.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error('Not authorized to save this itinerary');
+  }
+
+  // Update status to confirmed (saved)
+  itinerary.status = 'confirmed';
+  await itinerary.save();
+
+  // Update user stats
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $inc: { 'travelStats.totalSaved': 1 }
+    }
+  );
+
+  res.json({
+    success: true,
+    message: 'Itinerary saved successfully',
+    data: itinerary
+  });
+});
+
 module.exports = {
   generateItinerary,
   saveDraftItinerary,
@@ -325,5 +364,6 @@ module.exports = {
   getItinerary,
   updateItinerary,
   deleteItinerary,
-  regenerateItinerary
+  regenerateItinerary,
+  saveItinerary
 };

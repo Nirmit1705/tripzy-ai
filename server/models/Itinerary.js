@@ -124,7 +124,7 @@ const itinerarySchema = mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'generated', 'confirmed', 'completed', 'cancelled'],
+    enum: ['draft', 'generated', 'confirmed', 'saved', 'completed', 'cancelled'],
     default: 'draft'
   },
   createdFrom: {

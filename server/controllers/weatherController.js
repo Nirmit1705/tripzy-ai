@@ -44,7 +44,51 @@ const getForecast = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get weather for specific date and location
+// @route   GET /api/weather/date
+// @access  Public
+const getWeatherForDate = asyncHandler(async (req, res) => {
+  const { city, date } = req.query;
+  
+  if (!city || !date) {
+    res.status(400);
+    throw new Error('City and date are required');
+  }
+
+  logger.info(`Weather request for city: ${city}, date: ${date}`);
+  
+  const weather = await weatherService.getWeatherForDate(city, date);
+  
+  res.json({
+    success: true,
+    data: weather
+  });
+});
+
+// @desc    Get weather for itinerary
+// @route   POST /api/weather/itinerary
+// @access  Public
+const getWeatherForItinerary = asyncHandler(async (req, res) => {
+  const { dailyItinerary } = req.body;
+  
+  if (!dailyItinerary || !Array.isArray(dailyItinerary)) {
+    res.status(400);
+    throw new Error('Daily itinerary array is required');
+  }
+
+  logger.info(`Weather request for itinerary with ${dailyItinerary.length} days`);
+  
+  const weatherData = await weatherService.getWeatherForItinerary(dailyItinerary);
+  
+  res.json({
+    success: true,
+    data: weatherData
+  });
+});
+
 module.exports = {
   getCurrentWeather,
-  getForecast
+  getForecast,
+  getWeatherForDate,
+  getWeatherForItinerary
 };

@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middlewares/authMiddleware');
-const { chatWithAgent, updateItinerary } = require('../controllers/agentController');
+const { chatWithAgent, updateItinerary, applyActionableChange } = require('../controllers/agentController');
 
+// Agent routes
 router.post('/chat', protect, chatWithAgent);
 router.post('/update', protect, updateItinerary);
+router.post('/apply-change', protect, applyActionableChange);
 
 module.exports = router;
-router.post('/update', protect, (req, res) => {
-  res.json({ message: 'Update itinerary via AI endpoint' });
-});
 
-module.exports = router;
+
+

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import apiService from "../services/api";
-import MapComponent from "../components/MapComponent"
+import MapComponent from "../components/MapComponent";
+import weatherService from "../services/weatherService";
 
 const Results = () => {
   const navigate = useNavigate()
@@ -21,6 +22,9 @@ const Results = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateError, setRegenerateError] = useState('');
+  const [weatherData, setWeatherData] = useState({});
+  const [isLoadingWeather, setIsLoadingWeather] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     // Get form data from sessionStorage
@@ -79,75 +83,146 @@ const Results = () => {
         location: day.location,
         date: day.date,
         hotel: {
-          name: day.accommodation?.name || 'Hotel not specified',
-          address: day.accommodation?.address || 'Address not available',
-          rating: day.accommodation?.rating || 3,
-          price: `${day.accommodation?.currency || '₹'}${day.accommodation?.price || 0}`
+          name: day.accommodation?.name || `Hotel in ${day.location}`,
+          address: day.accommodation?.address || `${day.location} area`,
+          rating: day.accommodation?.rating || 3.5,
+          price: `${day.accommodation?.currency || formData.currency}${day.accommodation?.price || 100}`
         },
         transport: {
           mode: day.transportation?.mode || 'Local Transport',
-          details: day.transportation?.details || 'Transportation details not available',
-          cost: `${day.transportation?.currency || '₹'}${day.transportation?.cost || 0}`
+          details: day.transportation?.details || 'Local transportation as needed',
+          cost: `${day.transportation?.currency || formData.currency}${day.transportation?.cost || 20}`
         },
-        activities: day.activities || ['No activities planned'],
+        activities: day.activities && day.activities.length > 0 
+          ? day.activities 
+          : [`Explore ${day.location}`, 'Local sightseeing', 'Cultural activities'],
         meals: {
-          breakfast: day.meals?.breakfast || 'Breakfast not planned',
-          lunch: day.meals?.lunch || 'Lunch not planned',
-          dinner: day.meals?.dinner || 'Dinner not planned'
+          breakfast: day.meals?.breakfast || `Local breakfast in ${day.location}`,
+          lunch: day.meals?.lunch || `Traditional lunch in ${day.location}`,
+          dinner: day.meals?.dinner || `Local dinner in ${day.location}`
         },
         weather: day.weather || {
           temp: '25°C',
-          condition: 'Sunny',
-          humidity: '60%'
+          condition: 'Loading weather...',
+          humidity: '65%',
+          available: false
         },
-        estimatedCost: day.estimatedCost || 0
+        estimatedCost: day.estimatedCost || 150
       }));
       
       setItinerary(processedItinerary);
+      
+      // Fetch real weather data
+      fetchWeatherForItinerary(processedItinerary);
       
       // Store the itinerary ID for regeneration
       if (dbItinerary._id) {
         sessionStorage.setItem('currentItineraryId', dbItinerary._id);
       }
     } else {
-      console.log('No AI-generated content, using fallback');
-      generateMockItinerary(formData);
+      console.log('No AI-generated content, using enhanced fallback');
+      generateEnhancedMockItinerary(formData);
     }
   };
 
-  const generateMockItinerary = (data) => {
+  const generateEnhancedMockItinerary = (data) => {
     const days = parseInt(data.numberOfDays) || 3;
+    const destinations = data.destinations || [data.destination];
     const mockItinerary = [];
     
     for (let i = 1; i <= days; i++) {
+      const currentDestination = destinations[Math.floor((i-1) / Math.ceil(days / destinations.length))] || destinations[0];
+      
+      // Calculate date for this day
+      const dayDate = new Date(data.startDate);
+      dayDate.setDate(dayDate.getDate() + i - 1);
+      
       mockItinerary.push({
         day: i,
-        location: `${data.destinations?.[0] || data.destination} - Area ${i}`,
+        location: currentDestination,
+        date: dayDate.toISOString().split('T')[0],
         hotel: {
-          name: `Grand Hotel Day ${i}`,
-          address: `123 Main Street, ${data.destinations?.[0] || data.destination}`,
-          rating: 4.5,
-          price: data.budget === 'low' ? '₹2000' : data.budget === 'moderate' ? '₹4000' : '₹8000'
+          name: `${currentDestination} Hotel (Day ${i})`,
+          address: `${currentDestination} city center`,
+          rating: 3.5 + Math.random() * 1.5,
+          price: data.budget === 'low' ? `${data.currency}50` : data.budget === 'moderate' ? `${data.currency}100` : `${data.currency}200`
         },
         transport: {
-          mode: i === 1 ? 'Flight' : 'Local Transport',
-          details: i === 1 ? 'Flight AI-101 at 10:30 AM' : 'Metro/Taxi as needed',
-          cost: i === 1 ? '₹5000' : '₹500'
+          mode: i === 1 ? 'Arrival Transport' : 'Local Transport',
+          details: i === 1 ? 'Travel to destination' : 'Local transportation within city',
+          cost: i === 1 ? `${data.currency}100` : `${data.currency}25`
         },
         activities: [
-          `Morning: Explore local attractions`,
-          `Afternoon: Cultural experiences`,
-          `Evening: Local cuisine and markets`
+          `Morning exploration of ${currentDestination}`,
+          `Visit popular attractions in ${currentDestination}`,
+          `Cultural experiences in ${currentDestination}`,
+          `Evening activities in ${currentDestination}`
         ],
+        meals: {
+          breakfast: `Local breakfast cafe in ${currentDestination}`,
+          lunch: `Traditional restaurant in ${currentDestination}`,
+          dinner: `Popular dinner spot in ${currentDestination}`
+        },
         weather: {
-          temp: `${25 + Math.floor(Math.random() * 10)}°C`,
-          condition: i % 3 === 0 ? "Sunny" : i % 3 === 1 ? "Partly Cloudy" : "Clear",
-          humidity: `${50 + Math.floor(Math.random() * 30)}%`
-        }
+          temp: 'Loading...',
+          condition: 'Loading weather...',
+          humidity: 'N/A',
+          available: false
+        },
+        estimatedCost: data.budget === 'low' ? 75 : data.budget === 'moderate' ? 150 : 300
       });
     }
     
     setItinerary(mockItinerary);
+    // Fetch real weather data for mock itinerary too
+    fetchWeatherForItinerary(mockItinerary);
+  };
+
+  // New function to fetch weather data
+  const fetchWeatherForItinerary = async (itineraryData) => {
+    setIsLoadingWeather(true);
+    
+    try {
+      console.log('Fetching weather for itinerary:', itineraryData);
+      
+      const weatherResults = await weatherService.getWeatherForItinerary(itineraryData);
+      console.log('Weather results:', weatherResults);
+      
+      // Create weather lookup object
+      const weatherLookup = {};
+      weatherResults.forEach(dayWeather => {
+        weatherLookup[dayWeather.day] = dayWeather.weather;
+      });
+      
+      setWeatherData(weatherLookup);
+      
+      // Update itinerary with weather data
+      setItinerary(prev => prev.map(day => ({
+        ...day,
+        weather: weatherLookup[day.day] || {
+          temp: 'N/A',
+          condition: 'Weather not available',
+          humidity: 'N/A',
+          available: false
+        }
+      })));
+      
+    } catch (error) {
+      console.error('Failed to fetch weather for itinerary:', error);
+      
+      // Set fallback weather data
+      setItinerary(prev => prev.map(day => ({
+        ...day,
+        weather: {
+          temp: 'N/A',
+          condition: 'Weather not available',
+          humidity: 'N/A',
+          available: false
+        }
+      })));
+    } finally {
+      setIsLoadingWeather(false);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -168,31 +243,58 @@ const Results = () => {
         const loadingMessage = {
           id: Date.now() + 1,
           type: 'bot',
-          message: 'Thinking...',
+          message: 'Processing your request...',
           isLoading: true
         };
         setChatMessages(prev => [...prev, loadingMessage]);
 
-        // Call the chat API
+        // Get current itinerary ID for modifications
+        const itineraryId = sessionStorage.getItem('currentItineraryId');
+
+        // Call the chat API with enhanced context
         const response = await apiService.chatWithAgent(userMessage, {
           itinerary: formData,
-          currentDay: selectedDay
+          currentDay: selectedDay,
+          itineraryId: itineraryId
         });
 
-        // Remove loading message and add real response
-        setChatMessages(prev => {
-          const withoutLoading = prev.filter(msg => !msg.isLoading);
-          return [...withoutLoading, {
+        // Remove loading message
+        setChatMessages(prev => prev.filter(msg => !msg.isLoading));
+
+        // Handle the response
+        if (response.modified && response.itinerary) {
+          // Itinerary was modified - update the display
+          console.log('Itinerary was modified by AI:', response.itinerary);
+          
+          generateItineraryFromDatabase(response.itinerary, formData);
+          sessionStorage.setItem('itineraryData', JSON.stringify(response.itinerary));
+          
+          // Add success message
+          const modificationMessage = {
             id: Date.now() + 2,
             type: 'bot',
-            message: response.message || 'I apologize, but I encountered an issue. Please try again.'
-          }];
-        });
+            message: `✅ ${response.message}`,
+            isModification: true
+          };
+          setChatMessages(prev => [...prev, modificationMessage]);
+
+        } else {
+          // Regular chat response with potential actionable changes
+          const chatMessage = {
+            id: Date.now() + 2,
+            type: 'bot',
+            message: response.message || 'I can help you modify your itinerary.',
+            suggestions: response.suggestions || [],
+            actionableChanges: response.actionableChanges || [],
+            canApplyChanges: response.canApplyChanges || false,
+            itineraryId: itineraryId
+          };
+          setChatMessages(prev => [...prev, chatMessage]);
+        }
 
       } catch (error) {
         console.error('Chat error:', error);
         
-        // Remove loading message and add error response
         setChatMessages(prev => {
           const withoutLoading = prev.filter(msg => !msg.isLoading);
           return [...withoutLoading, {
@@ -207,9 +309,129 @@ const Results = () => {
     }
   };
 
+  const handleApplyChange = async (changeAction, messageId, itineraryId) => {
+    try {
+      console.log('Applying change:', changeAction);
+      
+      // Update the message to show loading state
+      setChatMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, applyingChangeId: changeAction.id }
+          : msg
+      ));
+
+      const response = await apiService.applyActionableChange(itineraryId, changeAction);
+      
+      if (response.success && response.itinerary) {
+        // Update the itinerary display
+        generateItineraryFromDatabase(response.itinerary, formData);
+        sessionStorage.setItem('itineraryData', JSON.stringify(response.itinerary));
+        
+        // Update the message to show applied state
+        setChatMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { 
+                ...msg, 
+                applyingChangeId: null,
+                appliedChanges: [...(msg.appliedChanges || []), changeAction.id]
+              }
+            : msg
+        ));
+
+        // Add success feedback message
+        const successMessage = {
+          id: Date.now(),
+          type: 'bot',
+          message: `✅ ${response.message}`,
+          isChangeApplied: true
+        };
+        setChatMessages(prev => [...prev, successMessage]);
+
+      } else {
+        throw new Error(response.message || 'Failed to apply change');
+      }
+
+    } catch (error) {
+      console.error('Error applying change:', error);
+      
+      // Remove loading state and show error
+      setChatMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, applyingChangeId: null }
+          : msg
+      ));
+
+      // Add error message
+      const errorMessage = {
+        id: Date.now(),
+        type: 'bot',
+        message: `❌ Failed to apply change: ${error.message}`,
+        isError: true
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleSaveItinerary = async () => {
+    const itineraryId = sessionStorage.getItem('currentItineraryId');
+    
+    if (!itineraryId) {
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now(),
+        type: 'bot',
+        message: '❌ Cannot save - itinerary ID not found. Please try regenerating your itinerary first.',
+        isError: true
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      console.log('Saving itinerary:', itineraryId);
+      
+      const response = await apiService.saveItinerary(itineraryId);
+      
+      if (response.success) {
+        console.log('Itinerary saved successfully');
+        
+        // Add success message to chat
+        const successMessage = {
+          id: Date.now(),
+          type: 'bot',
+          message: '✅ Perfect! Your itinerary has been saved successfully. You can now find it in your profile under saved trips. I\'m here if you need any more help planning your adventure!',
+          isSuccess: true
+        };
+        setChatMessages(prev => [...prev, successMessage]);
+        
+        // Update the stored itinerary data
+        const formData = JSON.parse(sessionStorage.getItem('tripFormData'));
+        sessionStorage.setItem('itineraryData', JSON.stringify(response.data));
+        
+      } else {
+        throw new Error(response.message || 'Failed to save itinerary');
+      }
+    } catch (error) {
+      console.error('Save failed:', error);
+      
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now(),
+        type: 'bot',
+        message: `❌ Sorry, I couldn't save your itinerary: ${error.message}. Please try again or let me know if you need help.`,
+        isError: true
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRegenerateItinerary = async () => {
@@ -625,19 +847,53 @@ const Results = () => {
                       <Cloud className="w-7 h-7 text-[#2e7f43]" />
                     </div>
                     <h3 className="text-2xl font-semibold text-[#2e7f43]">Weather Forecast</h3>
+                    {isLoadingWeather && (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#2e7f43]"></div>
+                    )}
                   </div>
                   <div className="ml-16">
                     <div className="bg-gray-50 p-6 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-4xl font-bold text-[#2e7f43] mb-2">{currentDayData.weather.temp}</div>
-                          <div className="text-xl text-gray-600">{currentDayData.weather.condition}</div>
+                      {currentDayData?.weather?.available === false ? (
+                        <div className="text-center py-4">
+                          <p className="text-gray-600 text-lg mb-2">Weather information not available</p>
+                          <p className="text-gray-500 text-sm">
+                            {isLoadingWeather ? 'Loading weather data...' : 'Unable to fetch weather data for this location and date'}
+                          </p>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg text-gray-600 mb-1">Humidity</div>
-                          <div className="font-bold text-xl text-[#2e7f43]">{currentDayData.weather.humidity}</div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-4xl font-bold text-[#2e7f43] mb-2">
+                              {currentDayData?.weather?.temp || 'N/A'}
+                            </div>
+                            <div className="text-xl text-gray-600">
+                              {currentDayData?.weather?.condition || 'Unknown'}
+                            </div>
+                            {currentDayData?.weather?.description && (
+                              <div className="text-sm text-gray-500 mt-1 capitalize">
+                                {currentDayData.weather.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg text-gray-600 mb-1">Humidity</div>
+                            <div className="font-bold text-xl text-[#2e7f43]">
+                              {currentDayData?.weather?.humidity || 'N/A'}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
+                    </div>
+                    
+                    {/* Weather Status Indicator */}
+                    <div className="mt-3 text-center">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                        currentDayData?.weather?.available !== false
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {currentDayData?.weather?.available !== false ? '✓ Live Weather Data' : '⚠ Weather Unavailable'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -655,6 +911,7 @@ const Results = () => {
                       <MapComponent
                         hotel={currentDayData?.hotel}
                         attractions={currentDayData?.activities || []}
+                        location={currentDayData?.location}
                         zoom={14}
                         className="w-full h-full"
                       />
@@ -675,15 +932,25 @@ const Results = () => {
                     {/* Action Buttons */}
                     <div className="flex gap-4 mt-6">
                       <Button 
+                        onClick={handleSaveItinerary}
+                        disabled={isSaving}
                         className="flex-1 bg-gradient-to-r from-[#2e7f43] to-[#6da57b] hover:from-[#245f35] hover:to-[#5a8f66] text-white py-3"
                       >
-                        Save Draft
+                        {isSaving ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Itinerary'
+                        )}
                       </Button>
                       <Button 
                         variant="outline" 
                         className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50 py-3"
+                        onClick={() => navigate('/plan')}
                       >
-                        Cancel
+                        Plan New Trip
                       </Button>
                     </div>
                   </div>
@@ -700,16 +967,112 @@ const Results = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {chatMessages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs px-4 py-2 rounded-lg ${
+                <div className={`max-w-sm px-4 py-2 rounded-lg ${
                   msg.type === 'user' 
                     ? 'bg-[#2e7f43] text-white' 
+                    : msg.isModification 
+                    ? 'bg-green-100 text-green-800 border border-green-300'
+                    : msg.isChangesSummary
+                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                    : msg.isChangeApplied
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : msg.isError
+                    ? 'bg-red-50 text-red-700 border border-red-200'
+                    : msg.isSuccess
+                    ? 'bg-green-50 text-green-700 border border-green-200'
                     : 'bg-gray-100 text-gray-800'
                 }`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {msg.type === 'bot' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                    <span className="text-xs opacity-75">{msg.type === 'bot' ? 'Assistant' : 'You'}</span>
+                    {msg.type === 'bot' ? (
+                      msg.isModification || msg.isChangeApplied ? (
+                        <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">✓</span>
+                        </div>
+                      ) : msg.isError ? (
+                        <div className="w-4 h-4 bg-red-600 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">!</span>
+                        </div>
+                      ) : msg.isSuccess ? (
+                        <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">✓</span>
+                        </div>
+                      ) : (
+                        <Bot className="w-4 h-4" />
+                      )
+                    ) : (
+                      <User className="w-4 h-4" />
+                    )}
+                    <span className="text-xs opacity-75">
+                      {msg.type === 'bot' ? 
+                        msg.isModification ? 'Modified' : 
+                        msg.isChangesSummary ? 'Changes' : 
+                        msg.isChangeApplied ? 'Applied' :
+                        msg.isError ? 'Error' :
+                        msg.isSuccess ? 'Saved' : 'Assistant' 
+                        : 'You'}
+                    </span>
                   </div>
-                  <p className="text-sm">{msg.message}</p>
+                  
+                  <p className="text-sm whitespace-pre-line mb-2">{msg.message}</p>
+                  
+                  {/* Actionable Changes Buttons */}
+                  {msg.actionableChanges && msg.actionableChanges.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-medium text-gray-600">Quick Actions:</p>
+                      <div className="space-y-1">
+                        {msg.actionableChanges.map((change) => {
+                          const isApplying = msg.applyingChangeId === change.id;
+                          const isApplied = msg.appliedChanges?.includes(change.id);
+                          
+                          return (
+                            <button
+                              key={change.id}
+                              onClick={() => handleApplyChange(change, msg.id, msg.itineraryId)}
+                              disabled={isApplying || isApplied}
+                              className={`w-full text-left p-2 rounded text-xs transition-colors ${
+                                isApplied 
+                                  ? 'bg-green-200 text-green-800 cursor-default' 
+                                  : isApplying
+                                  ? 'bg-yellow-100 text-yellow-800 cursor-wait'
+                                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 hover:border-[#2e7f43]'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{change.description}</span>
+                                {isApplying && (
+                                  <div className="animate-spin w-3 h-3 border border-gray-400 border-t-transparent rounded-full"></div>
+                                )}
+                                {isApplied && (
+                                  <span className="text-green-600">✓ Applied</span>
+                                )}
+                                {!isApplying && !isApplied && (
+                                  <span className="text-[#2e7f43] text-xs">Apply →</span>
+                                )}
+                              </div>
+                              {change.targetDay && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Day {change.targetDay}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Text Suggestions */}
+                  {msg.suggestions && msg.suggestions.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-gray-600">Suggestions:</p>
+                      {msg.suggestions.slice(0, 3).map((suggestion, index) => (
+                        <div key={index} className="text-xs text-gray-600 bg-gray-50 rounded p-1">
+                          • {suggestion}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {msg.isLoading && (
                     <div className="flex items-center gap-2 mt-2">
                       <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>

@@ -4,21 +4,29 @@ class PromptBuilder {
     const interestsList = Array.isArray(preferences.interests) ? preferences.interests.join(', ') : 'general sightseeing';
     
     return `Create a detailed ${days}-day travel itinerary for ${destinationsList}.
+
+IMPORTANT: Use REAL places, activities, hotels, and restaurants. Research actual names and locations.
     
 Budget: ${budget} budget level
 Travelers: ${preferences.travelers || 1} people
 Interests: ${interestsList}
 Travel style: ${preferences.travelStyle || 'balanced'}
 
-Please provide:
-1. Daily activities and attractions
-2. Recommended accommodations
-3. Transportation suggestions
-4. Local food recommendations
-5. Estimated costs
-6. Practical tips
+Please provide SPECIFIC recommendations:
+1. Real attraction names and actual places to visit
+2. Actual restaurant names with their specialties
+3. Real hotel names that exist in the destination
+4. Specific transportation options with routes/details
+5. Realistic pricing based on the destination and budget
 
-Make it engaging and practical for the specified budget and interests.`;
+For each day include:
+- Morning, afternoon, and evening activities (specific places)
+- Breakfast, lunch, dinner recommendations (actual restaurant names)
+- Accommodation details (real hotel names and addresses)
+- Transportation specifics (metro lines, bus routes, taxi estimates)
+- Daily cost estimates in local currency
+
+Make it engaging, practical, and use real establishment names for the specified budget and interests.`;
   }
 
   static buildChatPrompt(userMessage, context) {

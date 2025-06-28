@@ -9,7 +9,7 @@ AI-powered trip planning backend service that generates personalized travel itin
 - Starting location and multiple destinations planning
 - Route optimization for multiple destinations
 - Real-time weather integration
-- Interactive AI agent for trip modifications
+- Interactive AI agent for trip modifications including activity swapping
 - Hotel search and booking via Amadeus API
 - Place recommendations via OpenStreetMap
 - Budget optimization
@@ -54,11 +54,14 @@ AI-powered trip planning backend service that generates personalized travel itin
 - `GET /` - Get user itineraries (with pagination and filtering)
 - `GET /:id` - Get specific itinerary
 - `PUT /:id` - Update itinerary
+- `PUT /:id/save` - Save/confirm itinerary
+- `PUT /:id/regenerate` - Regenerate itinerary with AI
 - `DELETE /:id` - Delete itinerary
 
 ### Agent Routes (`/api/agent`)
-- `POST /chat` - Chat with AI agent
-- `POST /update` - Update itinerary via AI
+- `POST /chat` - Chat with AI agent (includes actionable changes and activity swapping)
+- `POST /update` - Update itinerary via AI  
+- `POST /apply-change` - Apply specific actionable change to itinerary (supports swapping)
 
 ### Map Routes (`/api/map`)
 - `GET /geocode` - Convert address to coordinates
@@ -71,6 +74,26 @@ AI-powered trip planning backend service that generates personalized travel itin
 - `POST /multi-destination-route` - Plan optimal route for multiple destinations
 - `POST /geocode-multiple` - Geocode multiple locations at once
 - `POST /multi-destination-hotels` - Get hotels for multiple destinations
+
+## Supported Modification Types
+
+The AI agent supports various types of itinerary modifications:
+
+### Basic Modifications
+- **Add activities**: "Add Taj Mahal to day 2"
+- **Remove activities**: "Remove the shopping activity from day 1"
+- **Change hotels**: "Change the hotel on day 1 to luxury"
+- **Update meals**: "Replace lunch with Italian cuisine on day 2"
+
+### Advanced Operations
+- **Activity swapping**: "Swap day 1 activities with day 2 activities"
+- **Full day exchange**: "Exchange everything between day 1 and day 3"
+- **Selective swapping**: "Move day 2 activities to day 1"
+
+### Feasibility Checking
+- Validates impossible requests (e.g., "travel from USA to India in 1 day")
+- Checks budget constraints for luxury requests
+- Ensures day numbers are within trip duration
 
 ## Environment Variables
 
